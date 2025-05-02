@@ -1,2 +1,0 @@
-# excursions
-Excursion scheduler 
