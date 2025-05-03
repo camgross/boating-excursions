@@ -32,18 +32,18 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) =
     return slots;
   };
 
-  const handleMouseDown = (slotTime: string, unitIndex: number) => {
+  const handleMouseDown = (slotTime: string, unitIndex: number, seatIndex: number) => {
     setIsDragging(true);
-    setStartSlot(`${unitIndex}-${slotTime}`);
-    setTempSlots({ [`${unitIndex}-${slotTime}`]: true });
+    setStartSlot(`${unitIndex}-${seatIndex}-${slotTime}`);
+    setTempSlots({ [`${unitIndex}-${seatIndex}-${slotTime}`]: true });
   };
 
-  const handleMouseEnter = (slotTime: string, unitIndex: number) => {
+  const handleMouseEnter = (slotTime: string, unitIndex: number, seatIndex: number) => {
     if (isDragging && startSlot) {
-      const [startUnitIndex, startTime] = startSlot.split('-');
-      const currentSlot = `${unitIndex}-${slotTime}`;
+      const [startUnitIndex, startSeatIndex, startTime] = startSlot.split('-');
+      const currentSlot = `${unitIndex}-${seatIndex}-${slotTime}`;
       
-      if (startUnitIndex === unitIndex.toString()) {
+      if (startUnitIndex === unitIndex.toString() && startSeatIndex === seatIndex.toString()) {
         const newTempSlots = { ...tempSlots };
         const timeSlots = generateTimeSlots();
         const startIndex = timeSlots.indexOf(startTime);
@@ -52,7 +52,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) =
         const [min, max] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
         
         for (let i = min; i <= max; i++) {
-          newTempSlots[`${unitIndex}-${timeSlots[i]}`] = true;
+          newTempSlots[`${unitIndex}-${seatIndex}-${timeSlots[i]}`] = true;
         }
         
         setTempSlots(newTempSlots);
@@ -91,21 +91,49 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) =
                 {watercraft.details.type} 
                 {watercraft.details.quantity ? ` #${unitIndex + 1}` : ''}
               </h5>
-              <div className="grid grid-cols-16 gap-1">
-                {timeSlots.map((time) => (
-                  <button
-                    key={`${unitIndex}-${time}`}
-                    onMouseDown={() => handleMouseDown(time, unitIndex)}
-                    onMouseEnter={() => handleMouseEnter(time, unitIndex)}
-                    className={`p-2 text-sm border rounded transition-colors ${
-                      tempSlots[`${unitIndex}-${time}`] || selectedSlots[`${unitIndex}-${time}`]
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-50 hover:bg-gray-100'
-                    }`}
-                  >
-                    {time}
-                  </button>
-                ))}
+              <div className="flex">
+                {/* Time labels column */}
+                <div className="w-20 flex-shrink-0">
+                  <div className="h-8"></div>
+                  {timeSlots.map((time) => (
+                    <div key={`time-${time}`} className="h-8 text-xs font-medium flex items-center">
+                      {time}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Seats grid */}
+                <div className="flex-1">
+                  {/* Seat headers */}
+                  <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `repeat(${watercraft.details.capacity}, minmax(0, 1fr))` }}>
+                    {Array.from({ length: watercraft.details.capacity }).map((_, seatIndex) => (
+                      <div key={`header-${seatIndex}`} className="h-8 text-xs font-medium flex items-center justify-center border-b">
+                        Seat {seatIndex + 1}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Time slots grid */}
+                  <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${watercraft.details.capacity}, minmax(0, 1fr))` }}>
+                    {timeSlots.map((time) => (
+                      <React.Fragment key={`time-row-${time}`}>
+                        {Array.from({ length: watercraft.details.capacity }).map((_, seatIndex) => (
+                          <button
+                            key={`${unitIndex}-${seatIndex}-${time}`}
+                            onMouseDown={() => handleMouseDown(time, unitIndex, seatIndex)}
+                            onMouseEnter={() => handleMouseEnter(time, unitIndex, seatIndex)}
+                            className={`h-8 border rounded transition-colors ${
+                              tempSlots[`${unitIndex}-${seatIndex}-${time}`] || selectedSlots[`${unitIndex}-${seatIndex}-${time}`]
+                                ? 'bg-primary text-white'
+                                : 'bg-gray-50 hover:bg-gray-100'
+                            }`}
+                            title={`Seat ${seatIndex + 1} at ${time}`}
+                          />
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           ))}
