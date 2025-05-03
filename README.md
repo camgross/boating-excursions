@@ -7,8 +7,10 @@ A modern web application for booking boating excursions, built with Next.js, Typ
 - Browse available excursions
 - View detailed excursion information
 - Book excursions with date and time selection
+- Submit custom excursion suggestions
 - User authentication and profile management
 - Admin dashboard for excursion management
+- Responsive design for all devices
 
 ## Tech Stack
 
@@ -17,6 +19,7 @@ A modern web application for booking boating excursions, built with Next.js, Typ
 - TypeScript
 - Tailwind CSS
 - Zustand (State Management)
+- ESLint
 
 ## Getting Started
 
@@ -33,11 +36,24 @@ A modern web application for booking boating excursions, built with Next.js, Typ
 
 ## Project Structure
 
-- `/src/app` - Next.js app router pages
-- `/src/components` - Reusable React components
-- `/src/lib` - Utility functions and API clients
-- `/src/types` - TypeScript type definitions
-- `/src/styles` - Global styles and Tailwind configuration
+```
+src/
+├── app/                 # Next.js app router pages
+├── components/          # Reusable UI components
+│   ├── layout/         # Layout components
+│   ├── excursions/     # Excursion-related components
+│   └── booking/        # Booking-related components
+├── lib/                # Utility functions and API clients
+├── types/              # TypeScript type definitions
+└── styles/             # Global styles and Tailwind configuration
+```
+
+## Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
 
 ## Development Phases
 
@@ -54,4 +70,12 @@ A modern web application for booking boating excursions, built with Next.js, Typ
 3. **Phase 3: Admin Features**
    - Admin dashboard
    - Excursion management
-   - Analytics and reporting 
+   - Analytics and reporting
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
