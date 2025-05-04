@@ -8,6 +8,15 @@ export interface TimeSlot {
   userId: string | null;
   startTime: string;
   endTime: string;
+  firstName?: string;
+}
+
+export interface Reservation {
+  unitIndex: number;
+  seatIndex: number;
+  startTime: string;
+  endTime: string;
+  firstName: string;
 }
 
 export interface DailySchedule {
