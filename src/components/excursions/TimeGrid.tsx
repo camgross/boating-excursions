@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Watercraft, TimeSlot, Reservation } from '@/types/excursions';
+import { toast } from 'react-hot-toast';
 
 interface TimeGridProps {
   watercraft: {
@@ -10,9 +11,10 @@ interface TimeGridProps {
   };
   startTime: string;
   endTime: string;
+  date: string; // Add date prop to track reservations by day
 }
 
-const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) => {
+const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, date }) => {
   const [selectedSlots, setSelectedSlots] = useState<{[key: string]: boolean}>({});
   const [isDragging, setIsDragging] = useState(false);
   const [startSlot, setStartSlot] = useState<string | null>(null);
@@ -50,6 +52,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) =
       const end = new Date(`2000-01-01T${reservation.endTime}`);
       return reservation.unitIndex === unitIndex && 
              reservation.seatIndex === seatIndex && 
+             reservation.date === date &&
              slotTime >= start && 
              slotTime < end;
     });
@@ -62,6 +65,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) =
       const end = new Date(`2000-01-01T${res.endTime}`);
       return res.unitIndex === unitIndex && 
              res.seatIndex === seatIndex && 
+             res.date === date &&
              slotTime >= start && 
              slotTime < end;
     });
@@ -72,9 +76,25 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) =
     const reservation = reservations.find(res => {
       return res.unitIndex === unitIndex && 
              res.seatIndex === seatIndex && 
+             res.date === date &&
              res.startTime === time;
     });
     return !!reservation;
+  };
+
+  const hasDuplicateReservation = (firstName: string, startTime: string, endTime: string) => {
+    return reservations.some(reservation => {
+      const newStart = new Date(`2000-01-01T${startTime}`);
+      const newEnd = new Date(`2000-01-01T${endTime}`);
+      const resStart = new Date(`2000-01-01T${reservation.startTime}`);
+      const resEnd = new Date(`2000-01-01T${reservation.endTime}`);
+      
+      return reservation.firstName === firstName &&
+             reservation.date === date &&
+             ((newStart >= resStart && newStart < resEnd) ||
+              (newEnd > resStart && newEnd <= resEnd) ||
+              (newStart <= resStart && newEnd >= resEnd));
+    });
   };
 
   const handleMouseDown = (slotTime: string, unitIndex: number, seatIndex: number) => {
@@ -121,12 +141,24 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) =
     const startIndex = timeSlots.indexOf(startTime);
     const endIndex = timeSlots.indexOf(Object.keys(tempSlots)[Object.keys(tempSlots).length - 1].split('-')[2]);
     
+    const newStartTime = timeSlots[Math.min(startIndex, endIndex)];
+    const newEndTime = timeSlots[Math.max(startIndex, endIndex) + 1]; // Add 1 to include the last slot
+
+    if (hasDuplicateReservation(firstName.trim(), newStartTime, newEndTime)) {
+      toast.error('Reservation not saved due to reservation duplication.');
+      setShowModal(false);
+      setFirstName('');
+      setTempSlots({});
+      return;
+    }
+    
     const newReservation: Reservation = {
       unitIndex: parseInt(unitIndex),
       seatIndex: parseInt(seatIndex),
-      startTime: timeSlots[Math.min(startIndex, endIndex)],
-      endTime: timeSlots[Math.max(startIndex, endIndex)],
-      firstName: firstName.trim()
+      startTime: newStartTime,
+      endTime: newEndTime,
+      firstName: firstName.trim(),
+      date: date
     };
 
     const updatedReservations = [...reservations, newReservation];
@@ -198,7 +230,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime }) =
                               onMouseEnter={() => !isBooked && handleMouseEnter(time, unitIndex, seatIndex)}
                               className={`h-8 border rounded transition-colors relative ${
                                 isBooked
-                                  ? 'bg-gray-300 cursor-not-allowed'
+                                  ? 'bg-blue-500 text-white cursor-not-allowed'
                                   : tempSlots[`${unitIndex}-${seatIndex}-${time}`]
                                     ? 'bg-primary text-white'
                                     : 'bg-gray-50 hover:bg-gray-100'

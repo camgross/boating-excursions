@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { DailySchedule } from '@/types/excursions';
+import { DailySchedule, Watercraft } from '@/types/excursions';
 import TimeGrid from './TimeGrid';
 
 interface DayScheduleProps {
@@ -60,6 +60,7 @@ const DaySchedule: React.FC<DayScheduleProps> = ({ schedule, isSelected, onSelec
                 watercraft={schedule.watercraft[selectedWatercraft]}
                 startTime={schedule.startTime}
                 endTime={schedule.endTime}
+                date={schedule.date}
               />
             </div>
           )}

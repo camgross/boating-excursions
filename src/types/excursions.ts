@@ -17,6 +17,7 @@ export interface Reservation {
   startTime: string;
   endTime: string;
   firstName: string;
+  date: string;
 }
 
 export interface DailySchedule {
