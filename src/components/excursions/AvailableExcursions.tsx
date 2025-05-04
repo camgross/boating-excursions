@@ -6,6 +6,7 @@ import DaySchedule from './DaySchedule';
 
 const AvailableExcursions: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedWatercraft, setSelectedWatercraft] = useState<string | null>(null);
 
   const scheduleData: DailySchedule[] = [
     {
@@ -102,17 +103,82 @@ const AvailableExcursions: React.FC = () => {
     }
   ];
 
+  const handleDateSelect = (date: string) => {
+    setSelectedDate(date);
+    setSelectedWatercraft(null);
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h2 className="text-3xl font-bold mb-8">Available Excursions</h2>
       <div className="grid grid-cols-1 gap-8">
         {scheduleData.map((day) => (
-          <DaySchedule 
-            key={day.date}
-            schedule={day}
-            isSelected={selectedDate === day.date}
-            onSelect={() => setSelectedDate(day.date)}
-          />
+          <div key={day.date} className="border rounded-lg p-6 bg-white shadow-sm">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-semibold">
+                {day.dayOfWeek} - {new Date(day.date).toLocaleDateString()}
+              </h3>
+              <button
+                onClick={() => handleDateSelect(selectedDate === day.date ? null : day.date)}
+                className={`px-6 py-2 rounded-lg transition-colors ${
+                  selectedDate === day.date ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+              >
+                {selectedDate === day.date ? 'Hide Schedule' : 'View Schedule'}
+              </button>
+            </div>
+
+            {selectedDate === day.date && (
+              <div className="space-y-6">
+                {!selectedWatercraft ? (
+                  <div className="flex gap-4 flex-wrap">
+                    {Object.entries(day.watercraft).map(([key, craft]) => (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedWatercraft(key)}
+                        className={`px-6 py-3 rounded-lg transition-colors ${
+                          selectedWatercraft === key 
+                            ? 'bg-primary text-white' 
+                            : 'bg-gray-100 hover:bg-gray-200'
+                        }`}
+                      >
+                        <div className="font-semibold">{craft.details.type}</div>
+                        <div className="text-sm">
+                          Capacity: {craft.details.capacity} persons
+                          {craft.details.quantity && ` (${craft.details.quantity} available)`}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-xl font-semibold">
+                        {day.watercraft[selectedWatercraft!].details.type} Schedule
+                      </h4>
+                      <button
+                        onClick={() => setSelectedWatercraft(null)}
+                        className="text-sm text-gray-600 hover:text-gray-800"
+                      >
+                        ← Back to Watercraft Selection
+                      </button>
+                    </div>
+                    {selectedWatercraft && (
+                      <DaySchedule 
+                        date={day.date}
+                        dayOfWeek={day.dayOfWeek}
+                        startTime={day.startTime}
+                        endTime={day.endTime}
+                        watercraft={{
+                          [selectedWatercraft!]: day.watercraft[selectedWatercraft!]
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         ))}
       </div>
     </div>

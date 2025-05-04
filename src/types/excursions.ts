@@ -18,6 +18,7 @@ export interface Reservation {
   endTime: string;
   firstName: string;
   date: string;
+  watercraftType: string;
 }
 
 export interface DailySchedule {

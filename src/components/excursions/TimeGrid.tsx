@@ -5,30 +5,32 @@ import { Watercraft, TimeSlot, Reservation } from '@/types/excursions';
 import { toast } from 'react-hot-toast';
 
 interface TimeGridProps {
-  watercraft: {
-    details: Watercraft;
-    timeSlots: TimeSlot[][];
-  };
-  startTime: string;
-  endTime: string;
-  date: string; // Add date prop to track reservations by day
+  watercraft: Watercraft;
+  date: string;
+  onReservationChange: () => void;
 }
 
-const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, date }) => {
+const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChange }) => {
   const [selectedSlots, setSelectedSlots] = useState<{[key: string]: boolean}>({});
   const [isDragging, setIsDragging] = useState(false);
-  const [startSlot, setStartSlot] = useState<string | null>(null);
-  const [tempSlots, setTempSlots] = useState<{[key: string]: boolean}>({});
-  const [showModal, setShowModal] = useState(false);
-  const [firstName, setFirstName] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedUnit, setSelectedUnit] = useState<number | null>(null);
+  const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
+  const [selectedStartTime, setSelectedStartTime] = useState<string | null>(null);
+  const [selectedEndTime, setSelectedEndTime] = useState<string | null>(null);
+  const [reservationName, setReservationName] = useState('');
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const gridRef = useRef<HTMLDivElement>(null);
 
+  // Default operating hours
+  const startTime = '09:00';
+  const endTime = '17:00';
+
   // Load reservations from localStorage on mount
   useEffect(() => {
-    const storedReservations = localStorage.getItem('boating-reservations');
-    if (storedReservations) {
-      setReservations(JSON.parse(storedReservations));
+    const savedReservations = localStorage.getItem('reservations');
+    if (savedReservations) {
+      setReservations(JSON.parse(savedReservations));
     }
   }, []);
 
@@ -38,9 +40,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, dat
     const [endHour] = endTime.split(':').map(Number);
     
     for (let hour = startHour; hour < endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        slots.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
-      }
+      slots.push(`${hour.toString().padStart(2, '0')}:00`);
+      slots.push(`${hour.toString().padStart(2, '0')}:30`);
     }
     return slots;
   };
@@ -100,83 +101,81 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, dat
   const handleMouseDown = (slotTime: string, unitIndex: number, seatIndex: number) => {
     if (isSlotBooked(unitIndex, seatIndex, slotTime)) return;
     setIsDragging(true);
-    setStartSlot(`${unitIndex}-${seatIndex}-${slotTime}`);
-    setTempSlots({ [`${unitIndex}-${seatIndex}-${slotTime}`]: true });
+    setSelectedStartTime(`${unitIndex}-${seatIndex}-${slotTime}`);
+    setSelectedEndTime(slotTime);
+    setSelectedUnit(unitIndex);
+    setSelectedSeat(seatIndex);
+    setReservationName(getReservationName(unitIndex, seatIndex, slotTime) || '');
   };
 
   const handleMouseEnter = (slotTime: string, unitIndex: number, seatIndex: number) => {
-    if (isDragging && startSlot) {
-      const [startUnitIndex, startSeatIndex, startTime] = startSlot.split('-');
+    if (isDragging && selectedStartTime) {
+      const [startUnitIndex, startSeatIndex, startTime] = selectedStartTime.split('-');
       const currentSlot = `${unitIndex}-${seatIndex}-${slotTime}`;
       
       if (startUnitIndex === unitIndex.toString() && startSeatIndex === seatIndex.toString()) {
-        const newTempSlots = { ...tempSlots };
-        const timeSlots = generateTimeSlots();
-        const startIndex = timeSlots.indexOf(startTime);
-        const endIndex = timeSlots.indexOf(slotTime);
-        
-        const [min, max] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
-        
-        for (let i = min; i <= max; i++) {
-          newTempSlots[`${unitIndex}-${seatIndex}-${timeSlots[i]}`] = true;
-        }
-        
-        setTempSlots(newTempSlots);
+        setSelectedEndTime(slotTime);
       }
     }
   };
 
   const handleMouseUp = () => {
-    if (isDragging && Object.keys(tempSlots).length > 0) {
-      setShowModal(true);
+    if (isDragging && selectedStartTime && selectedEndTime) {
+      setIsModalOpen(true);
     }
     setIsDragging(false);
   };
 
   const handleSaveReservation = () => {
-    if (!firstName.trim()) return;
-
-    const [unitIndex, seatIndex, startTime] = Object.keys(tempSlots)[0].split('-');
-    const timeSlots = generateTimeSlots();
-    const startIndex = timeSlots.indexOf(startTime);
-    const endIndex = timeSlots.indexOf(Object.keys(tempSlots)[Object.keys(tempSlots).length - 1].split('-')[2]);
-    
-    const newStartTime = timeSlots[Math.min(startIndex, endIndex)];
-    const newEndTime = timeSlots[Math.max(startIndex, endIndex) + 1]; // Add 1 to include the last slot
-
-    if (hasDuplicateReservation(firstName.trim(), newStartTime, newEndTime)) {
-      toast.error('Reservation not saved due to reservation duplication.');
-      setShowModal(false);
-      setFirstName('');
-      setTempSlots({});
+    if (!selectedUnit || !selectedSeat || !selectedStartTime || !selectedEndTime || !reservationName) {
+      toast.error('Please fill in all fields');
       return;
     }
-    
+
+    if (hasDuplicateReservation(reservationName, selectedStartTime, selectedEndTime)) {
+      toast.error('You already have a reservation during this time');
+      return;
+    }
+
     const newReservation: Reservation = {
-      unitIndex: parseInt(unitIndex),
-      seatIndex: parseInt(seatIndex),
-      startTime: newStartTime,
-      endTime: newEndTime,
-      firstName: firstName.trim(),
-      date: date
+      unitIndex: selectedUnit,
+      seatIndex: selectedSeat,
+      startTime: selectedStartTime,
+      endTime: selectedEndTime,
+      firstName: reservationName,
+      date: date,
+      watercraftType: watercraft.type
     };
 
     const updatedReservations = [...reservations, newReservation];
+    localStorage.setItem('reservations', JSON.stringify(updatedReservations));
     setReservations(updatedReservations);
-    localStorage.setItem('boating-reservations', JSON.stringify(updatedReservations));
-    
-    setShowModal(false);
-    setFirstName('');
-    setTempSlots({});
+    onReservationChange();
+    setIsModalOpen(false);
+    toast.success('Reservation saved successfully!');
   };
 
   const handleCancelReservation = () => {
-    setShowModal(false);
-    setFirstName('');
-    setTempSlots({});
+    setIsModalOpen(false);
+    setReservationName('');
+    setSelectedStartTime(null);
+    setSelectedEndTime(null);
+    setSelectedUnit(null);
+    setSelectedSeat(null);
   };
 
   const timeSlots = generateTimeSlots();
+
+  const getReservationForSlot = (unitIndex: number, seatIndex: number, time: string) => {
+    return reservations.find(reservation => 
+      reservation.unitIndex === unitIndex && 
+      reservation.seatIndex === seatIndex && 
+      reservation.watercraftType === watercraft.type &&
+      reservation.date === date &&
+      time >= reservation.startTime && 
+      time < reservation.endTime
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -187,11 +186,11 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, dat
         onMouseLeave={handleMouseUp}
       >
         <div className="min-w-full">
-          {Array.from({ length: watercraft.details.quantity || 1 }).map((_, unitIndex) => (
+          {Array.from({ length: watercraft.quantity || 1 }).map((_, unitIndex) => (
             <div key={unitIndex} className="mb-6">
               <h5 className="text-lg font-semibold mb-2">
-                {watercraft.details.type} 
-                {watercraft.details.quantity ? ` #${unitIndex + 1}` : ''}
+                {watercraft.type} 
+                {watercraft.quantity ? ` #${unitIndex + 1}` : ''}
               </h5>
               <div className="flex">
                 {/* Time labels column */}
@@ -207,8 +206,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, dat
                 {/* Seats grid */}
                 <div className="flex-1">
                   {/* Seat headers */}
-                  <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `repeat(${watercraft.details.capacity}, minmax(0, 1fr))` }}>
-                    {Array.from({ length: watercraft.details.capacity }).map((_, seatIndex) => (
+                  <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
+                    {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => (
                       <div key={`header-${seatIndex}`} className="h-8 text-xs font-medium flex items-center justify-center border-b">
                         Seat {seatIndex + 1}
                       </div>
@@ -216,10 +215,10 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, dat
                   </div>
                   
                   {/* Time slots grid */}
-                  <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${watercraft.details.capacity}, minmax(0, 1fr))` }}>
+                  <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
                     {timeSlots.map((time) => (
                       <React.Fragment key={`time-row-${time}`}>
-                        {Array.from({ length: watercraft.details.capacity }).map((_, seatIndex) => {
+                        {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => {
                           const isBooked = isSlotBooked(unitIndex, seatIndex, time);
                           const isStart = isStartOfReservation(unitIndex, seatIndex, time);
                           const reservationName = getReservationName(unitIndex, seatIndex, time);
@@ -231,7 +230,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, dat
                               className={`h-8 border rounded transition-colors relative ${
                                 isBooked
                                   ? 'bg-blue-500 text-white cursor-not-allowed'
-                                  : tempSlots[`${unitIndex}-${seatIndex}-${time}`]
+                                  : selectedSlots[`${unitIndex}-${seatIndex}-${time}`]
                                     ? 'bg-primary text-white'
                                     : 'bg-gray-50 hover:bg-gray-100'
                               }`}
@@ -257,7 +256,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, dat
       </div>
 
       {/* Reservation Modal */}
-      {showModal && (
+      {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
             <h3 className="text-lg font-semibold mb-4">Make Reservation</h3>
@@ -267,8 +266,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, startTime, endTime, dat
               </label>
               <input
                 type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                value={reservationName}
+                onChange={(e) => setReservationName(e.target.value)}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Enter your first name"
               />
