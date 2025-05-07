@@ -34,6 +34,17 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     }
   }, []);
 
+  // Reset selection when modal is closed
+  useEffect(() => {
+    if (!isModalOpen) {
+      setSelectedUnit(null);
+      setSelectedSeat(null);
+      setSelectedStartTime(null);
+      setSelectedEndTime(null);
+      setSelectedSlots({});
+    }
+  }, [isModalOpen]);
+
   const generateTimeSlots = () => {
     const slots = [];
     const [startHour] = startTime.split(':').map(Number);
@@ -51,9 +62,12 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       const slotTime = new Date(`2000-01-01T${time}`);
       const start = new Date(`2000-01-01T${reservation.startTime}`);
       const end = new Date(`2000-01-01T${reservation.endTime}`);
+      
+      // Check if the slot is booked for the same watercraft type and date
       return reservation.unitIndex === unitIndex && 
              reservation.seatIndex === seatIndex && 
              reservation.date === date &&
+             reservation.watercraftType === watercraft.type &&
              slotTime >= start && 
              slotTime < end;
     });
@@ -67,6 +81,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       return res.unitIndex === unitIndex && 
              res.seatIndex === seatIndex && 
              res.date === date &&
+             res.watercraftType === watercraft.type &&
              slotTime >= start && 
              slotTime < end;
     });
@@ -78,80 +93,167 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       return res.unitIndex === unitIndex && 
              res.seatIndex === seatIndex && 
              res.date === date &&
+             res.watercraftType === watercraft.type &&
              res.startTime === time;
     });
     return !!reservation;
   };
 
   const hasDuplicateReservation = (firstName: string, startTime: string, endTime: string) => {
+    console.log('Checking for duplicates with:', { firstName, startTime, endTime });
+    
     return reservations.some(reservation => {
+      // Check for any reservation by the same person on the same date
+      if (reservation.firstName !== firstName || reservation.date !== date) {
+        return false;
+      }
+
       const newStart = new Date(`2000-01-01T${startTime}`);
       const newEnd = new Date(`2000-01-01T${endTime}`);
       const resStart = new Date(`2000-01-01T${reservation.startTime}`);
       const resEnd = new Date(`2000-01-01T${reservation.endTime}`);
       
-      return reservation.firstName === firstName &&
-             reservation.date === date &&
-             ((newStart >= resStart && newStart < resEnd) ||
-              (newEnd > resStart && newEnd <= resEnd) ||
-              (newStart <= resStart && newEnd >= resEnd));
+      console.log('Comparing times:', {
+        newStart: newStart.toISOString(),
+        newEnd: newEnd.toISOString(),
+        resStart: resStart.toISOString(),
+        resEnd: resEnd.toISOString(),
+        watercraftType: reservation.watercraftType,
+        currentWatercraftType: watercraft.type
+      });
+
+      // Check for any time overlap, including exact matches
+      const hasTimeOverlap = (
+        (newStart >= resStart && newStart < resEnd) ||  // New start time falls within existing reservation
+        (newEnd > resStart && newEnd <= resEnd) ||      // New end time falls within existing reservation
+        (newStart <= resStart && newEnd >= resEnd)      // New reservation completely overlaps existing reservation
+      );
+
+      return hasTimeOverlap;
     });
   };
 
   const handleMouseDown = (slotTime: string, unitIndex: number, seatIndex: number) => {
+    console.log('MouseDown - Setting initial values:', { slotTime, unitIndex, seatIndex });
     if (isSlotBooked(unitIndex, seatIndex, slotTime)) return;
     setIsDragging(true);
-    setSelectedStartTime(`${unitIndex}-${seatIndex}-${slotTime}`);
+    setSelectedStartTime(slotTime);
     setSelectedEndTime(slotTime);
     setSelectedUnit(unitIndex);
     setSelectedSeat(seatIndex);
-    setReservationName(getReservationName(unitIndex, seatIndex, slotTime) || '');
+    setSelectedSlots({ [`${unitIndex}-${seatIndex}-${slotTime}`]: true });
   };
 
   const handleMouseEnter = (slotTime: string, unitIndex: number, seatIndex: number) => {
-    if (isDragging && selectedStartTime) {
-      const [startUnitIndex, startSeatIndex, startTime] = selectedStartTime.split('-');
-      const currentSlot = `${unitIndex}-${seatIndex}-${slotTime}`;
+    if (isDragging && selectedStartTime && selectedUnit === unitIndex && selectedSeat === seatIndex) {
+      console.log('MouseEnter - Updating selection:', { slotTime, unitIndex, seatIndex });
+      const timeSlots = generateTimeSlots();
+      const startIndex = timeSlots.indexOf(selectedStartTime);
+      const endIndex = timeSlots.indexOf(slotTime);
+      const [min, max] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
       
-      if (startUnitIndex === unitIndex.toString() && startSeatIndex === seatIndex.toString()) {
-        setSelectedEndTime(slotTime);
+      const newSelectedSlots: { [key: string]: boolean } = {};
+      for (let i = min; i <= max; i++) {
+        newSelectedSlots[`${unitIndex}-${seatIndex}-${timeSlots[i]}`] = true;
       }
+      
+      setSelectedSlots(newSelectedSlots);
+      setSelectedEndTime(timeSlots[max]);
+      setSelectedUnit(unitIndex);
+      setSelectedSeat(seatIndex);
     }
   };
 
   const handleMouseUp = () => {
-    if (isDragging && selectedStartTime && selectedEndTime) {
+    console.log('MouseUp - Final values:', {
+      selectedStartTime,
+      selectedEndTime,
+      selectedUnit,
+      selectedSeat
+    });
+    if (isDragging && selectedStartTime && selectedEndTime && selectedUnit !== null && selectedSeat !== null) {
+      // Get the final selected time block
+      const timeSlots = generateTimeSlots();
+      const startIndex = timeSlots.indexOf(selectedStartTime);
+      const endIndex = timeSlots.indexOf(selectedEndTime);
+      const [min, max] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
+      
+      // Update both start and end times to ensure we have the correct block
+      setSelectedStartTime(timeSlots[min]);
+      setSelectedEndTime(timeSlots[max]);
       setIsModalOpen(true);
     }
     setIsDragging(false);
   };
 
   const handleSaveReservation = () => {
-    if (!selectedUnit || !selectedSeat || !selectedStartTime || !selectedEndTime || !reservationName) {
-      toast.error('Please fill in all fields');
+    console.log('Debug - Field values before save:', {
+      selectedUnit: selectedUnit,
+      selectedSeat: selectedSeat,
+      selectedStartTime: selectedStartTime,
+      selectedEndTime: selectedEndTime,
+      reservationName: reservationName,
+      allFieldsPresent: Boolean(selectedUnit !== null && selectedSeat !== null && selectedStartTime && selectedEndTime && reservationName)
+    });
+
+    if (selectedUnit === null) {
+      console.log('Missing selectedUnit');
+      toast.error('Please select a unit');
+      return;
+    }
+    if (selectedSeat === null) {
+      console.log('Missing selectedSeat');
+      toast.error('Please select a seat');
+      return;
+    }
+    if (!selectedStartTime) {
+      console.log('Missing selectedStartTime');
+      toast.error('Please select a start time');
+      return;
+    }
+    if (!selectedEndTime) {
+      console.log('Missing selectedEndTime');
+      toast.error('Please select an end time');
+      return;
+    }
+    if (!reservationName) {
+      console.log('Missing reservationName');
+      toast.error('Please enter your name');
       return;
     }
 
-    if (hasDuplicateReservation(reservationName, selectedStartTime, selectedEndTime)) {
-      toast.error('You already have a reservation during this time');
+    // Get the final time block
+    const timeSlots = generateTimeSlots();
+    const startIndex = timeSlots.indexOf(selectedStartTime);
+    const endIndex = timeSlots.indexOf(selectedEndTime);
+    const [min, max] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
+    
+    const startTime = timeSlots[min];
+    const endTime = timeSlots[max];
+
+    if (hasDuplicateReservation(reservationName, startTime, endTime)) {
+      toast.error('You already have a reservation during this time period');
       return;
     }
 
     const newReservation: Reservation = {
       unitIndex: selectedUnit,
       seatIndex: selectedSeat,
-      startTime: selectedStartTime,
-      endTime: selectedEndTime,
+      startTime: startTime,
+      endTime: endTime,
       firstName: reservationName,
       date: date,
       watercraftType: watercraft.type
     };
+
+    console.log('Creating new reservation:', newReservation);
 
     const updatedReservations = [...reservations, newReservation];
     localStorage.setItem('reservations', JSON.stringify(updatedReservations));
     setReservations(updatedReservations);
     onReservationChange();
     setIsModalOpen(false);
+    setSelectedSlots({});
     toast.success('Reservation saved successfully!');
   };
 
@@ -162,6 +264,13 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     setSelectedEndTime(null);
     setSelectedUnit(null);
     setSelectedSeat(null);
+    setSelectedSlots({});
+  };
+
+  const handleClearReservations = () => {
+    localStorage.removeItem('reservations');
+    setReservations([]);
+    toast.success('All reservations cleared');
   };
 
   const timeSlots = generateTimeSlots();
@@ -179,6 +288,17 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
 
   return (
     <div className="space-y-4">
+      {/* Development-only clear button */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleClearReservations}
+            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm"
+          >
+            Clear All Reservations
+          </button>
+        </div>
+      )}
       <div 
         ref={gridRef}
         className="overflow-x-auto"
