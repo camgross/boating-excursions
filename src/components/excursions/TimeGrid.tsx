@@ -63,13 +63,25 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       const start = new Date(`2000-01-01T${reservation.startTime}`);
       const end = new Date(`2000-01-01T${reservation.endTime}`);
       
-      // Check if the slot is booked for the same watercraft type and date
-      return reservation.unitIndex === unitIndex && 
-             reservation.seatIndex === seatIndex && 
-             reservation.date === date &&
-             reservation.watercraftType === watercraft.type &&
-             slotTime >= start && 
-             slotTime < end;
+      const isBooked = reservation.unitIndex === unitIndex && 
+                      reservation.seatIndex === seatIndex && 
+                      reservation.date === date &&
+                      reservation.watercraftType === watercraft.type &&
+                      slotTime >= start && 
+                      slotTime <= end;  // Changed from < to <= to include end time
+      
+      if (isBooked) {
+        console.log('Slot booked:', {
+          time,
+          start: reservation.startTime,
+          end: reservation.endTime,
+          unitIndex,
+          seatIndex,
+          watercraftType: watercraft.type
+        });
+      }
+      
+      return isBooked;
     });
   };
 
@@ -83,18 +95,20 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
              res.date === date &&
              res.watercraftType === watercraft.type &&
              slotTime >= start && 
-             slotTime < end;
+             slotTime <= end;  // Changed from < to <= to include end time
     });
     return reservation?.firstName;
   };
 
   const isStartOfReservation = (unitIndex: number, seatIndex: number, time: string) => {
     const reservation = reservations.find(res => {
+      const slotTime = new Date(`2000-01-01T${time}`);
+      const start = new Date(`2000-01-01T${res.startTime}`);
       return res.unitIndex === unitIndex && 
              res.seatIndex === seatIndex && 
              res.date === date &&
              res.watercraftType === watercraft.type &&
-             res.startTime === time;
+             slotTime.getTime() === start.getTime();
     });
     return !!reservation;
   };
@@ -103,8 +117,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     console.log('Checking for duplicates with:', { firstName, startTime, endTime });
     
     return reservations.some(reservation => {
-      // Check for any reservation by the same person on the same date
-      if (reservation.firstName !== firstName || reservation.date !== date) {
+      // Check for any reservation by the same person on the same date (case-insensitive)
+      if (reservation.firstName.toLowerCase() !== firstName.toLowerCase() || reservation.date !== date) {
         return false;
       }
 
@@ -134,7 +148,6 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   };
 
   const handleMouseDown = (slotTime: string, unitIndex: number, seatIndex: number) => {
-    console.log('MouseDown - Setting initial values:', { slotTime, unitIndex, seatIndex });
     if (isSlotBooked(unitIndex, seatIndex, slotTime)) return;
     setIsDragging(true);
     setSelectedStartTime(slotTime);
@@ -142,11 +155,17 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     setSelectedUnit(unitIndex);
     setSelectedSeat(seatIndex);
     setSelectedSlots({ [`${unitIndex}-${seatIndex}-${slotTime}`]: true });
+    
+    console.log('MouseDown - Initial selection:', {
+      slotTime,
+      unitIndex,
+      seatIndex,
+      watercraftType: watercraft.type
+    });
   };
 
   const handleMouseEnter = (slotTime: string, unitIndex: number, seatIndex: number) => {
     if (isDragging && selectedStartTime && selectedUnit === unitIndex && selectedSeat === seatIndex) {
-      console.log('MouseEnter - Updating selection:', { slotTime, unitIndex, seatIndex });
       const timeSlots = generateTimeSlots();
       const startIndex = timeSlots.indexOf(selectedStartTime);
       const endIndex = timeSlots.indexOf(slotTime);
@@ -159,70 +178,73 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       
       setSelectedSlots(newSelectedSlots);
       setSelectedEndTime(timeSlots[max]);
-      setSelectedUnit(unitIndex);
-      setSelectedSeat(seatIndex);
+      
+      console.log('MouseEnter - Updated selection:', {
+        startTime: timeSlots[min],
+        endTime: timeSlots[max],
+        selectedSlots: Object.keys(newSelectedSlots).length,
+        unitIndex,
+        seatIndex
+      });
     }
   };
 
   const handleMouseUp = () => {
-    console.log('MouseUp - Final values:', {
-      selectedStartTime,
-      selectedEndTime,
-      selectedUnit,
-      selectedSeat
-    });
     if (isDragging && selectedStartTime && selectedEndTime && selectedUnit !== null && selectedSeat !== null) {
-      // Get the final selected time block
       const timeSlots = generateTimeSlots();
       const startIndex = timeSlots.indexOf(selectedStartTime);
       const endIndex = timeSlots.indexOf(selectedEndTime);
       const [min, max] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
       
-      // Update both start and end times to ensure we have the correct block
-      setSelectedStartTime(timeSlots[min]);
-      setSelectedEndTime(timeSlots[max]);
+      // Ensure we have the correct time block
+      const finalStartTime = timeSlots[min];
+      const finalEndTime = timeSlots[max];
+      
+      setSelectedStartTime(finalStartTime);
+      setSelectedEndTime(finalEndTime);
+      
+      // Update selected slots to match the final time block
+      const newSelectedSlots: { [key: string]: boolean } = {};
+      for (let i = min; i <= max; i++) {
+        newSelectedSlots[`${selectedUnit}-${selectedSeat}-${timeSlots[i]}`] = true;
+      }
+      setSelectedSlots(newSelectedSlots);
+      
+      console.log('MouseUp - Final selection:', {
+        startTime: finalStartTime,
+        endTime: finalEndTime,
+        selectedSlots: Object.keys(newSelectedSlots).length,
+        unitIndex: selectedUnit,
+        seatIndex: selectedSeat
+      });
+      
       setIsModalOpen(true);
     }
     setIsDragging(false);
   };
 
   const handleSaveReservation = () => {
-    console.log('Debug - Field values before save:', {
-      selectedUnit: selectedUnit,
-      selectedSeat: selectedSeat,
-      selectedStartTime: selectedStartTime,
-      selectedEndTime: selectedEndTime,
-      reservationName: reservationName,
-      allFieldsPresent: Boolean(selectedUnit !== null && selectedSeat !== null && selectedStartTime && selectedEndTime && reservationName)
-    });
-
     if (selectedUnit === null) {
-      console.log('Missing selectedUnit');
       toast.error('Please select a unit');
       return;
     }
     if (selectedSeat === null) {
-      console.log('Missing selectedSeat');
       toast.error('Please select a seat');
       return;
     }
     if (!selectedStartTime) {
-      console.log('Missing selectedStartTime');
       toast.error('Please select a start time');
       return;
     }
     if (!selectedEndTime) {
-      console.log('Missing selectedEndTime');
       toast.error('Please select an end time');
       return;
     }
     if (!reservationName) {
-      console.log('Missing reservationName');
       toast.error('Please enter your name');
       return;
     }
 
-    // Get the final time block
     const timeSlots = generateTimeSlots();
     const startIndex = timeSlots.indexOf(selectedStartTime);
     const endIndex = timeSlots.indexOf(selectedEndTime);
@@ -230,6 +252,16 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     
     const startTime = timeSlots[min];
     const endTime = timeSlots[max];
+
+    console.log('Saving reservation:', {
+      startTime,
+      endTime,
+      unitIndex: selectedUnit,
+      seatIndex: selectedSeat,
+      name: reservationName,
+      watercraftType: watercraft.type,
+      date
+    });
 
     if (hasDuplicateReservation(reservationName, startTime, endTime)) {
       toast.error('You already have a reservation during this time period');
@@ -246,14 +278,22 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       watercraftType: watercraft.type
     };
 
-    console.log('Creating new reservation:', newReservation);
-
+    // Update reservations state and localStorage
     const updatedReservations = [...reservations, newReservation];
     localStorage.setItem('reservations', JSON.stringify(updatedReservations));
     setReservations(updatedReservations);
-    onReservationChange();
-    setIsModalOpen(false);
+    
+    // Clear selection and close modal
     setSelectedSlots({});
+    setSelectedStartTime(null);
+    setSelectedEndTime(null);
+    setSelectedUnit(null);
+    setSelectedSeat(null);
+    setReservationName('');
+    setIsModalOpen(false);
+    
+    // Notify parent component and show success message
+    onReservationChange();
     toast.success('Reservation saved successfully!');
   };
 
