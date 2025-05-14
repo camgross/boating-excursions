@@ -19,6 +19,9 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   const [selectedEndTime, setSelectedEndTime] = useState<string | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<number | null>(null);
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{unitIndex: number, seatIndex: number, timeIndex: number} | null>(null);
+  const [dragEnd, setDragEnd] = useState<{unitIndex: number, seatIndex: number, timeIndex: number} | null>(null);
 
   // Load reservations from localStorage on mount
   useEffect(() => {
@@ -78,15 +81,64 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     );
   };
 
-  const handleSlotClick = (time: string, unitIndex: number, seatIndex: number) => {
-    if (isSlotBooked(unitIndex, seatIndex, time)) return;
-    
-    setSelectedStartTime(time);
-    setSelectedEndTime(time);
-    setSelectedUnit(unitIndex);
-    setSelectedSeat(seatIndex);
-    setSelectedSlots({ [`${unitIndex}-${seatIndex}-${time}`]: true });
-    setIsModalOpen(true);
+  const handleMouseDown = (unitIndex: number, seatIndex: number, timeIndex: number) => {
+    if (isSlotBooked(unitIndex, seatIndex, timeSlots[timeIndex])) return;
+    setDragging(true);
+    setDragStart({ unitIndex, seatIndex, timeIndex });
+    setDragEnd({ unitIndex, seatIndex, timeIndex });
+  };
+
+  const handleMouseEnter = (unitIndex: number, seatIndex: number, timeIndex: number) => {
+    if (!dragging || !dragStart) return;
+    // Only allow drag within the same seat/unit
+    if (unitIndex !== dragStart.unitIndex || seatIndex !== dragStart.seatIndex) return;
+    setDragEnd({ unitIndex, seatIndex, timeIndex });
+  };
+
+  const handleMouseUp = () => {
+    if (dragging && dragStart && dragEnd) {
+      setDragging(false);
+      // Calculate range
+      const [start, end] = [dragStart.timeIndex, dragEnd.timeIndex].sort((a, b) => a - b);
+      const newSelectedSlots: {[key: string]: boolean} = {};
+      for (let i = start; i <= end; i++) {
+        newSelectedSlots[`${dragStart.unitIndex}-${dragStart.seatIndex}-${timeSlots[i]}`] = true;
+      }
+      setSelectedStartTime(timeSlots[start]);
+      setSelectedEndTime(timeSlots[end]);
+      setSelectedUnit(dragStart.unitIndex);
+      setSelectedSeat(dragStart.seatIndex);
+      setSelectedSlots(newSelectedSlots);
+      setIsModalOpen(true);
+    }
+    setDragging(false);
+    setDragStart(null);
+    setDragEnd(null);
+  };
+
+  // Helper to clear selection state
+  const clearSelection = () => {
+    setSelectedSlots({});
+    setSelectedStartTime(null);
+    setSelectedEndTime(null);
+    setSelectedUnit(null);
+    setSelectedSeat(null);
+    setReservationName('');
+    setIsModalOpen(false);
+  };
+
+  const handleCancelReservation = () => {
+    clearSelection();
+  };
+
+  const getNextTimeSlot = (time: string) => {
+    const idx = timeSlots.indexOf(time);
+    if (idx === -1 || idx === timeSlots.length - 1) return time;
+    return timeSlots[idx + 1];
+  };
+
+  const isOverlap = (startA: string, endA: string, startB: string, endB: string) => {
+    return startA < endB && startB < endA;
   };
 
   const handleSaveReservation = () => {
@@ -95,11 +147,39 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       return;
     }
 
+    // Set endTime to the next slot after the last selected time
+    const trueEndTime = getNextTimeSlot(selectedEndTime);
+    const normalizedName = reservationName.trim().toLowerCase();
+
+    // 1. Prevent overlapping reservations for the same seat/unit
+    const seatConflict = reservations.some(r =>
+      r.unitIndex === selectedUnit &&
+      r.seatIndex === selectedSeat &&
+      r.date === date &&
+      r.watercraftType === watercraft.type &&
+      isOverlap(selectedStartTime, trueEndTime, r.startTime, r.endTime)
+    );
+    if (seatConflict) {
+      toast.error('This seat is already reserved for the selected time.');
+      return;
+    }
+
+    // 2. Prevent the same user from having overlapping reservations on the same day across all boats/seats
+    const userConflict = reservations.some(r =>
+      r.date === date &&
+      r.firstName.trim().toLowerCase() === normalizedName &&
+      isOverlap(selectedStartTime, trueEndTime, r.startTime, r.endTime)
+    );
+    if (userConflict) {
+      toast.error('You already have a reservation at this time.');
+      return;
+    }
+
     const newReservation: Reservation = {
       unitIndex: selectedUnit,
       seatIndex: selectedSeat,
       startTime: selectedStartTime,
-      endTime: selectedEndTime,
+      endTime: trueEndTime,
       firstName: reservationName,
       date: date,
       watercraftType: watercraft.type
@@ -108,21 +188,20 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     const updatedReservations = [...reservations, newReservation];
     localStorage.setItem('reservations', JSON.stringify(updatedReservations));
     setReservations(updatedReservations);
-    
-    // Reset state
-    setSelectedSlots({});
-    setSelectedStartTime(null);
-    setSelectedEndTime(null);
-    setSelectedUnit(null);
-    setSelectedSeat(null);
-    setReservationName('');
-    setIsModalOpen(false);
-    
+    clearSelection();
     onReservationChange();
     toast.success('Reservation saved successfully!');
   };
 
   const timeSlots = generateTimeSlots();
+
+  // Add mouseup listener to the container to handle mouseup outside button
+  useEffect(() => {
+    if (!dragging) return;
+    const handleUp = () => handleMouseUp();
+    window.addEventListener('mouseup', handleUp);
+    return () => window.removeEventListener('mouseup', handleUp);
+  }, [dragging]);
 
   return (
     <div className="space-y-4">
@@ -143,26 +222,44 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                 ))}
               </div>
               {/* Time slots grid */}
-              {timeSlots.map((time) => (
+              {timeSlots.map((time, timeIndex) => (
                 <div key={`row-${time}`} className="grid gap-1 items-center" style={{ gridTemplateColumns: `120px repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
                   <div className="h-8 flex items-center justify-center text-xs font-medium">
                     {time}
                   </div>
                   {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => {
                     const isBooked = isSlotBooked(unitIndex, seatIndex, time);
+                    const isSelected = selectedSlots[`${unitIndex}-${seatIndex}-${time}`];
+                    // Find reservation for this block
+                    const reservation = reservations.find(r =>
+                      r.unitIndex === unitIndex &&
+                      r.seatIndex === seatIndex &&
+                      r.date === date &&
+                      r.watercraftType === watercraft.type &&
+                      time >= r.startTime && time < r.endTime
+                    );
+                    // Show name only in the top (earliest) block of the reservation
+                    let showName = false;
+                    if (reservation && reservation.startTime === time) {
+                      showName = true;
+                    }
                     return (
                       <button
                         key={`${unitIndex}-${seatIndex}-${time}`}
-                        onClick={() => handleSlotClick(time, unitIndex, seatIndex)}
+                        onMouseDown={() => handleMouseDown(unitIndex, seatIndex, timeIndex)}
+                        onMouseEnter={() => handleMouseEnter(unitIndex, seatIndex, timeIndex)}
+                        onMouseUp={handleMouseUp}
                         className={`h-8 border rounded transition-colors ${
                           isBooked
                             ? 'bg-blue-500 text-white cursor-not-allowed'
-                            : selectedSlots[`${unitIndex}-${seatIndex}-${time}`]
+                            : isSelected
                               ? 'bg-primary text-white'
                               : 'bg-gray-50 hover:bg-gray-100'
-                        }`}
+                        } flex items-center justify-center text-xs font-medium relative`}
                         disabled={isBooked}
-                      />
+                      >
+                        {showName && reservation ? reservation.firstName : ''}
+                      </button>
                     );
                   })}
                 </div>
@@ -191,7 +288,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
             </div>
             <div className="flex justify-end gap-4">
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={handleCancelReservation}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
               >
                 Cancel
