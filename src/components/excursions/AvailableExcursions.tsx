@@ -4,14 +4,27 @@ import React, { useState } from 'react';
 import { DailySchedule } from '@/types/excursions';
 import DaySchedule from './DaySchedule';
 
+// Helper to parse date string as local time
+const getLocalDateObj = (dateString: string) => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const getDayOfWeek = (dateString: string) => {
+  return getLocalDateObj(dateString).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Chicago' });
+};
+
+const getFormattedDate = (dateString: string) => {
+  return getLocalDateObj(dateString).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' });
+};
+
 const AvailableExcursions: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedWatercraft, setSelectedWatercraft] = useState<string | null>(null);
 
   const scheduleData: DailySchedule[] = [
     {
-      date: '2024-06-21',
-      dayOfWeek: 'Saturday',
+      date: '2025-06-21',
       startTime: '14:00',
       endTime: '18:00',
       watercraft: {
@@ -33,8 +46,7 @@ const AvailableExcursions: React.FC = () => {
       }
     },
     {
-      date: '2024-06-22',
-      dayOfWeek: 'Sunday',
+      date: '2025-06-22',
       startTime: '13:00',
       endTime: '17:00',
       watercraft: {
@@ -56,8 +68,7 @@ const AvailableExcursions: React.FC = () => {
       }
     },
     {
-      date: '2024-06-23',
-      dayOfWeek: 'Monday',
+      date: '2025-06-23',
       startTime: '13:00',
       endTime: '17:00',
       watercraft: {
@@ -79,8 +90,7 @@ const AvailableExcursions: React.FC = () => {
       }
     },
     {
-      date: '2024-06-24',
-      dayOfWeek: 'Tuesday',
+      date: '2025-06-24',
       startTime: '13:00',
       endTime: '17:00',
       watercraft: {
@@ -103,7 +113,9 @@ const AvailableExcursions: React.FC = () => {
     }
   ];
 
-  const handleDateSelect = (date: string) => {
+  console.log('DEBUG: scheduleData at render', scheduleData);
+
+  const handleDateSelect = (date: string | null) => {
     setSelectedDate(date);
     setSelectedWatercraft(null);
   };
@@ -116,7 +128,7 @@ const AvailableExcursions: React.FC = () => {
           <div key={day.date} className="border rounded-lg p-6 bg-white shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-semibold">
-                {day.dayOfWeek} - {new Date(day.date).toLocaleDateString()}
+                {getDayOfWeek(day.date)} - {getFormattedDate(day.date)}
               </h3>
               <button
                 onClick={() => handleDateSelect(selectedDate === day.date ? null : day.date)}
@@ -154,7 +166,7 @@ const AvailableExcursions: React.FC = () => {
                   <div>
                     <div className="flex justify-between items-center mb-4">
                       <h4 className="text-xl font-semibold">
-                        {day.watercraft[selectedWatercraft!].details.type} Schedule
+                        {selectedWatercraft && day.watercraft[selectedWatercraft].details.type} Schedule
                       </h4>
                       <button
                         onClick={() => setSelectedWatercraft(null)}
@@ -166,11 +178,14 @@ const AvailableExcursions: React.FC = () => {
                     {selectedWatercraft && (
                       <DaySchedule 
                         date={day.date}
-                        dayOfWeek={day.dayOfWeek}
+                        dayOfWeek={getDayOfWeek(day.date)}
                         startTime={day.startTime}
                         endTime={day.endTime}
                         watercraft={{
-                          [selectedWatercraft!]: day.watercraft[selectedWatercraft!]
+                          [selectedWatercraft]: {
+                            details: day.watercraft[selectedWatercraft].details,
+                            timeSlots: day.watercraft[selectedWatercraft].timeSlots
+                          }
                         }}
                       />
                     )}

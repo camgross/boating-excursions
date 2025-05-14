@@ -32,7 +32,7 @@ const DaySchedule: React.FC<DayScheduleProps> = ({ date, dayOfWeek, startTime, e
       </h3>
       <div className="space-y-8">
         <div>
-          <h4 className="text-lg font-medium mb-4">{watercraftType}</h4>
+          <h4 className="text-lg font-medium mb-4">{watercraftDetails.details.type}</h4>
           <TimeGrid
             watercraft={watercraftDetails.details}
             date={date}

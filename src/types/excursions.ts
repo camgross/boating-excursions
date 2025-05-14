@@ -23,7 +23,7 @@ export interface Reservation {
 
 export interface DailySchedule {
   date: string;
-  dayOfWeek: string;
+  dayOfWeek?: string;
   startTime: string;
   endTime: string;
   watercraft: {
