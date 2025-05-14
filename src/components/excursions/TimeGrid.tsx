@@ -133,54 +133,40 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
               <h5 className="text-lg font-semibold mb-2">
                 {watercraft.type} {watercraft.quantity ? `#${unitIndex + 1}` : ''}
               </h5>
-              <div className="flex">
-                {/* Time labels */}
-                <div className="w-20 flex-shrink-0">
-                  <div className="h-8"></div>
-                  {timeSlots.map((time) => (
-                    <div key={`time-${time}`} className="h-8 text-xs font-medium flex items-center">
-                      {time}
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Seats grid */}
-                <div className="flex-1">
-                  {/* Seat headers */}
-                  <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
-                    {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => (
-                      <div key={`header-${seatIndex}`} className="h-8 text-xs font-medium flex items-center justify-center border-b">
-                        Seat {seatIndex + 1}
-                      </div>
-                    ))}
+              {/* Seat headers */}
+              <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `120px repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
+                <div></div>
+                {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => (
+                  <div key={`header-${seatIndex}`} className="h-8 text-xs font-medium flex items-center justify-center border-b">
+                    Seat {seatIndex + 1}
                   </div>
-                  
-                  {/* Time slots grid */}
-                  <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
-                    {timeSlots.map((time) => (
-                      <React.Fragment key={`time-row-${time}`}>
-                        {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => {
-                          const isBooked = isSlotBooked(unitIndex, seatIndex, time);
-                          return (
-                            <button
-                              key={`${unitIndex}-${seatIndex}-${time}`}
-                              onClick={() => handleSlotClick(time, unitIndex, seatIndex)}
-                              className={`h-8 border rounded transition-colors ${
-                                isBooked
-                                  ? 'bg-blue-500 text-white cursor-not-allowed'
-                                  : selectedSlots[`${unitIndex}-${seatIndex}-${time}`]
-                                    ? 'bg-primary text-white'
-                                    : 'bg-gray-50 hover:bg-gray-100'
-                              }`}
-                              disabled={isBooked}
-                            />
-                          );
-                        })}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
+              {/* Time slots grid */}
+              {timeSlots.map((time) => (
+                <div key={`row-${time}`} className="grid gap-1 items-center" style={{ gridTemplateColumns: `120px repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
+                  <div className="h-8 flex items-center justify-center text-xs font-medium">
+                    {time}
+                  </div>
+                  {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => {
+                    const isBooked = isSlotBooked(unitIndex, seatIndex, time);
+                    return (
+                      <button
+                        key={`${unitIndex}-${seatIndex}-${time}`}
+                        onClick={() => handleSlotClick(time, unitIndex, seatIndex)}
+                        className={`h-8 border rounded transition-colors ${
+                          isBooked
+                            ? 'bg-blue-500 text-white cursor-not-allowed'
+                            : selectedSlots[`${unitIndex}-${seatIndex}-${time}`]
+                              ? 'bg-primary text-white'
+                              : 'bg-gray-50 hover:bg-gray-100'
+                        }`}
+                        disabled={isBooked}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           ))}
         </div>
