@@ -22,6 +22,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{unitIndex: number, seatIndex: number, timeIndex: number} | null>(null);
   const [dragEnd, setDragEnd] = useState<{unitIndex: number, seatIndex: number, timeIndex: number} | null>(null);
+  const [editReservation, setEditReservation] = useState<Reservation | null>(null);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   // Load reservations from localStorage on mount
   useEffect(() => {
@@ -151,8 +153,19 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     const trueEndTime = getNextTimeSlot(selectedEndTime);
     const normalizedName = reservationName.trim().toLowerCase();
 
-    // 1. Prevent overlapping reservations for the same seat/unit
+    // Helper to check if a reservation is the one being edited
+    const isEditingThisReservation = (r: Reservation) =>
+      editReservation &&
+      r.unitIndex === editReservation.unitIndex &&
+      r.seatIndex === editReservation.seatIndex &&
+      r.startTime === editReservation.startTime &&
+      r.endTime === editReservation.endTime &&
+      r.date === editReservation.date &&
+      r.watercraftType === editReservation.watercraftType;
+
+    // 1. Prevent overlapping reservations for the same seat/unit (exclude the one being edited)
     const seatConflict = reservations.some(r =>
+      !isEditingThisReservation(r) &&
       r.unitIndex === selectedUnit &&
       r.seatIndex === selectedSeat &&
       r.date === date &&
@@ -164,8 +177,9 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       return;
     }
 
-    // 2. Prevent the same user from having overlapping reservations on the same day across all boats/seats
+    // 2. Prevent the same user from having overlapping reservations on the same day across all boats/seats (exclude the one being edited)
     const userConflict = reservations.some(r =>
+      !isEditingThisReservation(r) &&
       r.date === date &&
       r.firstName.trim().toLowerCase() === normalizedName &&
       isOverlap(selectedStartTime, trueEndTime, r.startTime, r.endTime)
@@ -175,22 +189,75 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       return;
     }
 
-    const newReservation: Reservation = {
-      unitIndex: selectedUnit,
-      seatIndex: selectedSeat,
-      startTime: selectedStartTime,
-      endTime: trueEndTime,
-      firstName: reservationName,
-      date: date,
-      watercraftType: watercraft.type
-    };
-
-    const updatedReservations = [...reservations, newReservation];
+    let updatedReservations;
+    if (editReservation) {
+      // Update the existing reservation
+      updatedReservations = reservations.map(r =>
+        isEditingThisReservation(r)
+          ? {
+              ...r,
+              firstName: reservationName,
+              // Optionally allow changing other fields in the future
+            }
+          : r
+      );
+    } else {
+      // Add a new reservation
+      const newReservation: Reservation = {
+        unitIndex: selectedUnit,
+        seatIndex: selectedSeat,
+        startTime: selectedStartTime,
+        endTime: trueEndTime,
+        firstName: reservationName,
+        date: date,
+        watercraftType: watercraft.type
+      };
+      updatedReservations = [...reservations, newReservation];
+    }
     localStorage.setItem('reservations', JSON.stringify(updatedReservations));
     setReservations(updatedReservations);
     clearSelection();
+    setEditReservation(null);
     onReservationChange();
     toast.success('Reservation saved successfully!');
+  };
+
+  const openEditModal = (reservation: Reservation) => {
+    setEditReservation(reservation);
+    setReservationName(reservation.firstName);
+    setSelectedStartTime(reservation.startTime);
+    setSelectedEndTime(timeSlots[timeSlots.indexOf(reservation.endTime) - 1] || reservation.startTime);
+    setSelectedUnit(reservation.unitIndex);
+    setSelectedSeat(reservation.seatIndex);
+    // Highlight all blocks in the reservation range
+    const startIdx = timeSlots.indexOf(reservation.startTime);
+    const endIdx = timeSlots.indexOf(reservation.endTime) - 1;
+    const newSelectedSlots: {[key: string]: boolean} = {};
+    for (let i = startIdx; i <= endIdx; i++) {
+      newSelectedSlots[`${reservation.unitIndex}-${reservation.seatIndex}-${timeSlots[i]}`] = true;
+    }
+    setSelectedSlots(newSelectedSlots);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteReservation = () => {
+    if (!editReservation) return;
+    const updatedReservations = reservations.filter(r =>
+      !(
+        r.unitIndex === editReservation.unitIndex &&
+        r.seatIndex === editReservation.seatIndex &&
+        r.startTime === editReservation.startTime &&
+        r.endTime === editReservation.endTime &&
+        r.date === editReservation.date &&
+        r.watercraftType === editReservation.watercraftType
+      )
+    );
+    localStorage.setItem('reservations', JSON.stringify(updatedReservations));
+    setReservations(updatedReservations);
+    clearSelection();
+    setEditReservation(null);
+    onReservationChange();
+    toast.success('Reservation deleted.');
   };
 
   const timeSlots = generateTimeSlots();
@@ -249,6 +316,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                         onMouseDown={() => handleMouseDown(unitIndex, seatIndex, timeIndex)}
                         onMouseEnter={() => handleMouseEnter(unitIndex, seatIndex, timeIndex)}
                         onMouseUp={handleMouseUp}
+                        onClick={showName && reservation ? (e) => { e.preventDefault(); openEditModal(reservation); } : undefined}
                         className={`h-8 border rounded transition-colors ${
                           isBooked
                             ? 'bg-blue-500 text-white cursor-not-allowed'
@@ -256,7 +324,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                               ? 'bg-primary text-white'
                               : 'bg-gray-50 hover:bg-gray-100'
                         } flex items-center justify-center text-xs font-medium relative`}
-                        disabled={isBooked}
+                        disabled={isBooked && !showName}
                       >
                         {showName && reservation ? reservation.firstName : ''}
                       </button>
@@ -271,9 +339,30 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
 
       {/* Reservation Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-            <h3 className="text-lg font-semibold mb-4">Make Reservation</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full relative">
+            {/* Tooltip icon - only in edit mode */}
+            {editReservation && (
+              <div className="absolute top-4 right-4">
+                <button
+                  type="button"
+                  className="w-6 h-6 flex items-center justify-center rounded-full border border-gray-400 text-gray-600 bg-white hover:bg-gray-100 focus:outline-none"
+                  onMouseEnter={() => setShowTooltip(true)}
+                  onMouseLeave={() => setShowTooltip(false)}
+                  onFocus={() => setShowTooltip(true)}
+                  onBlur={() => setShowTooltip(false)}
+                  onClick={() => setShowTooltip(v => !v)}
+                >
+                  <span className="font-bold text-base">i</span>
+                </button>
+                {showTooltip && (
+                  <div className="absolute right-0 mt-2 w-64 p-3 bg-gray-800 text-white text-xs rounded shadow-lg z-50">
+                    If you'd like to adjust the time of your reservation, delete the reservation completely and then create a new reservation.
+                  </div>
+                )}
+              </div>
+            )}
+            <h3 className="text-lg font-semibold mb-4">{editReservation ? 'Edit Reservation' : 'Make Reservation'}</h3>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 First Name
@@ -293,6 +382,14 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
               >
                 Cancel
               </button>
+              {editReservation && (
+                <button
+                  onClick={handleDeleteReservation}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                >
+                  Delete Reservation
+                </button>
+              )}
               <button
                 onClick={handleSaveReservation}
                 className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
