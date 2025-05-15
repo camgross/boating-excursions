@@ -226,6 +226,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     clearSelection();
     setEditReservation(null);
     onReservationChange();
+    // Dispatch custom event for local storage changes
+    window.dispatchEvent(new Event('localStorageChange'));
     toast.success('Reservation saved successfully!');
   };
 
@@ -264,6 +266,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     clearSelection();
     setEditReservation(null);
     onReservationChange();
+    // Dispatch custom event for local storage changes
+    window.dispatchEvent(new Event('localStorageChange'));
     toast.success('Reservation deleted.');
   };
 

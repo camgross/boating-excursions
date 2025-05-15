@@ -136,55 +136,127 @@ const AvailableExcursions: React.FC = () => {
     return Array.from(new Set(allTimeSlots));
   }, [scheduleData]);
 
+  // Helper function to get the next time slot
+  const getNextTimeSlot = (time: string) => {
+    const idx = timeSlots.indexOf(time);
+    if (idx === -1) return time;
+    
+    // If it's the last slot, return the operating hours end time
+    if (idx === timeSlots.length - 1) {
+      return time;
+    }
+    
+    return timeSlots[idx + 1];
+  };
+
   // Calculate availability percentages for each watercraft on each day
   const calculateAvailability = useCallback(() => {
     const savedReservations = localStorage.getItem('reservations');
     const reservations = savedReservations ? JSON.parse(savedReservations) : [];
+    console.log('DEBUG: Current reservations:', reservations);
     
     const newAvailabilityMap: {[key: string]: number} = {};
     
     scheduleData.forEach(day => {
+      // Generate time slots for this specific day
+      const dayTimeSlots: string[] = [];
+      const [startHour, startMinute] = day.startTime.split(':').map(Number);
+      const [endHour, endMinute] = day.endTime.split(':').map(Number);
+      
+      let currentHour = startHour;
+      let currentMinute = startMinute;
+      
+      while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
+        dayTimeSlots.push(`${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`);
+        currentMinute += 15;
+        if (currentMinute >= 60) {
+          currentHour += 1;
+          currentMinute = 0;
+        }
+      }
+
+      console.log(`DEBUG: Day ${day.date} has ${dayTimeSlots.length} time slots:`, dayTimeSlots);
+
       Object.entries(day.watercraft).forEach(([key, craft]) => {
         // Calculate total seat-slots (all seats for all time slots)
-        const totalSeatSlots = 16 * (craft.details.quantity || 1) * craft.details.capacity;
+        const totalTimeSlots = dayTimeSlots.length;
+        const totalSeats = (craft.details.quantity || 1) * craft.details.capacity;
+        const totalAvailableSlots = totalTimeSlots * totalSeats;
         
-        // Count booked seat-slots
+        // Count booked slots by checking each seat in each time slot
         const dayReservations = reservations.filter((r: any) => 
           r.date === day.date && 
           r.watercraftType === craft.details.type
         );
+
+        console.log(`DEBUG: ${day.date} ${key} has ${dayReservations.length} reservations:`, dayReservations);
         
-        let bookedSeatSlots = 0;
-        dayReservations.forEach((reservation: any) => {
-          const startIdx = timeSlots.indexOf(reservation.startTime);
-          const endIdx = timeSlots.indexOf(reservation.endTime);
-          if (startIdx !== -1 && endIdx !== -1) {
-            bookedSeatSlots += (endIdx - startIdx);
+        let totalBookedSlots = 0;
+        
+        // For each time slot
+        dayTimeSlots.forEach(timeSlot => {
+          // For each unit
+          for (let unitIndex = 0; unitIndex < (craft.details.quantity || 1); unitIndex++) {
+            // For each seat in the unit
+            for (let seatIndex = 0; seatIndex < craft.details.capacity; seatIndex++) {
+              // Check if this specific seat is booked in this time slot
+              const isBooked = dayReservations.some((reservation: { unitIndex: number; seatIndex: number; startTime: string; endTime: string }) => 
+                reservation.unitIndex === unitIndex &&
+                reservation.seatIndex === seatIndex &&
+                timeSlot >= reservation.startTime &&
+                timeSlot < reservation.endTime
+              );
+              
+              if (isBooked) {
+                totalBookedSlots++;
+              }
+            }
           }
         });
         
         const availabilityKey = `${day.date}-${key}`;
-        const availability = Math.round(((totalSeatSlots - bookedSeatSlots) / totalSeatSlots) * 100);
+        const availability = Math.round(((totalAvailableSlots - totalBookedSlots) / totalAvailableSlots) * 100);
         newAvailabilityMap[availabilityKey] = Math.max(0, Math.min(100, availability));
+
+        console.log(`DEBUG: ${day.date} ${key} availability calculation:`, {
+          date: day.date,
+          watercraftType: key,
+          totalTimeSlots,
+          totalSeats,
+          totalAvailableSlots,
+          totalBookedSlots,
+          availability: newAvailabilityMap[availabilityKey],
+          operatingHours: `${day.startTime}-${day.endTime}`
+        });
       });
     });
     
     setAvailabilityMap(newAvailabilityMap);
-  }, [timeSlots]);
+  }, [scheduleData]);
 
   // Calculate availability on mount and when reservations change
   useEffect(() => {
     calculateAvailability();
     
-    // Set up storage event listener
+    // Set up storage event listener for changes from other windows/tabs
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'reservations') {
         calculateAvailability();
       }
     };
+
+    // Set up a custom event listener for changes in the current window
+    const handleLocalStorageChange = () => {
+      calculateAvailability();
+    };
     
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('localStorageChange', handleLocalStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('localStorageChange', handleLocalStorageChange);
+    };
   }, [calculateAvailability]);
 
   console.log('DEBUG: scheduleData at render', scheduleData);
