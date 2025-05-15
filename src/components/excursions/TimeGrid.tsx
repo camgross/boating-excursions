@@ -271,6 +271,28 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     toast.success('Reservation deleted.');
   };
 
+  const getReservationSequence = (unitIndex: number, seatIndex: number, time: string) => {
+    // Get all reservations for this seat in chronological order
+    const seatReservations = reservations
+      .filter(r =>
+        r.unitIndex === unitIndex &&
+        r.seatIndex === seatIndex &&
+        r.date === date &&
+        r.watercraftType === watercraft.type
+      )
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    // Find which reservation number this time slot belongs to
+    let sequence = 0;
+    for (const r of seatReservations) {
+      if (time >= r.startTime && time < r.endTime) {
+        return sequence;
+      }
+      sequence++;
+    }
+    return -1; // Not part of any reservation
+  };
+
   const timeSlots = generateTimeSlots();
 
   // Add mouseup listener to the container to handle mouseup outside button
@@ -308,6 +330,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                   {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => {
                     const isBooked = isSlotBooked(unitIndex, seatIndex, time);
                     const isSelected = selectedSlots[`${unitIndex}-${seatIndex}-${time}`];
+                    const sequence = getReservationSequence(unitIndex, seatIndex, time);
                     // Find reservation for this block
                     const reservation = reservations.find(r =>
                       r.unitIndex === unitIndex &&
@@ -330,7 +353,11 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                         onClick={showName && reservation ? (e) => { e.preventDefault(); openEditModal(reservation); } : undefined}
                         className={`h-8 border rounded transition-colors ${
                           isBooked
-                            ? 'bg-blue-500 text-white cursor-not-allowed'
+                            ? sequence >= 0  // Only check sequence if it's a booked slot
+                              ? sequence % 2 === 0
+                                ? 'bg-blue-500 text-white cursor-not-allowed'
+                                : 'bg-indigo-500 text-white cursor-not-allowed'
+                              : 'bg-blue-500 text-white cursor-not-allowed'  // Fallback for any edge cases
                             : isSelected
                               ? 'bg-primary text-white'
                               : 'bg-gray-50 hover:bg-gray-100'
