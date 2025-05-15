@@ -115,11 +115,6 @@ const AvailableExcursions: React.FC = () => {
 
   console.log('DEBUG: scheduleData at render', scheduleData);
 
-  const handleDateSelect = (date: string | null) => {
-    setSelectedDate(date);
-    setSelectedWatercraft(null);
-  };
-
   return (
     <div className="container mx-auto px-4 py-8">
       <h2 className="text-3xl font-bold mb-8">Available Excursions</h2>
@@ -130,69 +125,60 @@ const AvailableExcursions: React.FC = () => {
               <h3 className="text-2xl font-semibold">
                 {getDayOfWeek(day.date)} - {getFormattedDate(day.date)}
               </h3>
-              <button
-                onClick={() => handleDateSelect(selectedDate === day.date ? null : day.date)}
-                className={`px-6 py-2 rounded-lg transition-colors ${
-                  selectedDate === day.date ? 'bg-primary text-white' : 'bg-gray-100 hover:bg-gray-200'
-                }`}
-              >
-                {selectedDate === day.date ? 'Hide Schedule' : 'View Schedule'}
-              </button>
+              <div className="text-sm font-medium text-gray-600">
+                {day.startTime} - {day.endTime}
+              </div>
             </div>
 
-            {selectedDate === day.date && (
-              <div className="space-y-6">
-                {!selectedWatercraft ? (
-                  <div className="flex gap-4 flex-wrap">
-                    {Object.entries(day.watercraft).map(([key, craft]) => (
-                      <button
-                        key={key}
-                        onClick={() => setSelectedWatercraft(key)}
-                        className={`px-6 py-3 rounded-lg transition-colors ${
-                          selectedWatercraft === key 
-                            ? 'bg-primary text-white' 
-                            : 'bg-gray-100 hover:bg-gray-200'
-                        }`}
-                      >
-                        <div className="font-semibold">{craft.details.type}</div>
-                        <div className="text-sm">
-                          Capacity: {craft.details.capacity} persons
-                          {craft.details.quantity && ` (${craft.details.quantity} available)`}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div>
-                    <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-xl font-semibold">
-                        {selectedWatercraft && day.watercraft[selectedWatercraft].details.type} Schedule
-                      </h4>
-                      <button
-                        onClick={() => setSelectedWatercraft(null)}
-                        className="text-sm text-gray-600 hover:text-gray-800"
-                      >
-                        ← Back to Watercraft Selection
-                      </button>
+            <div className="space-y-6">
+              <div className="flex gap-4 flex-wrap">
+                {Object.entries(day.watercraft).map(([key, craft]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      if (selectedDate === day.date && selectedWatercraft === key) {
+                        setSelectedDate(null);
+                        setSelectedWatercraft(null);
+                      } else {
+                        setSelectedDate(day.date);
+                        setSelectedWatercraft(key);
+                      }
+                    }}
+                    className={`px-6 py-3 rounded-lg transition-colors ${
+                      selectedDate === day.date && selectedWatercraft === key
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 hover:bg-gray-200'
+                    } flex flex-col items-start`}
+                  >
+                    <div className="font-semibold">{craft.details.type}</div>
+                    <div className="text-sm opacity-90">
+                      {craft.details.capacity} {craft.details.capacity === 1 ? 'person' : 'persons'}
+                      {craft.details.quantity && ` • ${craft.details.quantity} available`}
                     </div>
-                    {selectedWatercraft && (
-                      <DaySchedule 
-                        date={day.date}
-                        dayOfWeek={getDayOfWeek(day.date)}
-                        startTime={day.startTime}
-                        endTime={day.endTime}
-                        watercraft={{
-                          [selectedWatercraft]: {
-                            details: day.watercraft[selectedWatercraft].details,
-                            timeSlots: day.watercraft[selectedWatercraft].timeSlots
-                          }
-                        }}
-                      />
-                    )}
-                  </div>
-                )}
+                    <div className="text-xs mt-1 opacity-80">
+                      {selectedDate === day.date && selectedWatercraft === key ? 'Hide Schedule' : 'View Schedule'}
+                    </div>
+                  </button>
+                ))}
               </div>
-            )}
+
+              {selectedDate === day.date && selectedWatercraft && (
+                <div className="mt-6">
+                  <DaySchedule 
+                    date={day.date}
+                    dayOfWeek={getDayOfWeek(day.date)}
+                    startTime={day.startTime}
+                    endTime={day.endTime}
+                    watercraft={{
+                      [selectedWatercraft]: {
+                        details: day.watercraft[selectedWatercraft].details,
+                        timeSlots: day.watercraft[selectedWatercraft].timeSlots
+                      }
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         ))}
       </div>
