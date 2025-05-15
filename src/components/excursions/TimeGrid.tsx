@@ -135,7 +135,14 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
 
   const getNextTimeSlot = (time: string) => {
     const idx = timeSlots.indexOf(time);
-    if (idx === -1 || idx === timeSlots.length - 1) return time;
+    if (idx === -1) return time;
+    
+    // If it's the last slot, return the operating hours end time
+    if (idx === timeSlots.length - 1) {
+      const { endTime } = getOperatingHours();
+      return endTime;
+    }
+    
     return timeSlots[idx + 1];
   };
 
