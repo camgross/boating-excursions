@@ -257,7 +257,7 @@ const AvailableExcursions: React.FC = () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('localStorageChange', handleLocalStorageChange);
     };
-  }, [calculateAvailability]);
+  }, []);
 
   console.log('DEBUG: scheduleData at render', scheduleData);
 
