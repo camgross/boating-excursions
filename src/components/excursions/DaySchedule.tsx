@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import TimeGrid from './TimeGrid';
 import { Watercraft, Reservation } from '@/types/excursions';
+import { getFormattedDate } from './AvailableExcursions';
 
 interface DayScheduleProps {
   date: string;
@@ -28,7 +29,7 @@ const DaySchedule: React.FC<DayScheduleProps> = ({ date, dayOfWeek, startTime, e
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h3 className="text-xl font-semibold mb-4">
-        {dayOfWeek}, {new Date(date).toLocaleDateString()}
+        {dayOfWeek}, {getFormattedDate(date)}
       </h3>
       <div className="space-y-8">
         <div>
