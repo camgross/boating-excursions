@@ -8,10 +8,10 @@ interface TimeGridProps {
   watercraft: Watercraft;
   date: string;
   onReservationChange: () => void;
+  reservations: Reservation[];
 }
 
-const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChange }) => {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
+const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChange, reservations }) => {
   const [selectedSlots, setSelectedSlots] = useState<{[key: string]: boolean}>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [reservationName, setReservationName] = useState('');
@@ -24,14 +24,6 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   const [dragEnd, setDragEnd] = useState<{unitIndex: number, seatIndex: number, timeIndex: number} | null>(null);
   const [editReservation, setEditReservation] = useState<Reservation | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
-
-  // Load reservations from localStorage on mount
-  useEffect(() => {
-    const savedReservations = localStorage.getItem('reservations');
-    if (savedReservations) {
-      setReservations(JSON.parse(savedReservations));
-    }
-  }, []);
 
   const getOperatingHours = () => {
     const [year, month, day] = date.split('-').map(Number);
@@ -222,9 +214,6 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       updatedReservations = [...reservations, newReservation];
     }
     localStorage.setItem('reservations', JSON.stringify(updatedReservations));
-    setReservations(updatedReservations);
-    clearSelection();
-    setEditReservation(null);
     onReservationChange();
     // Dispatch custom event for local storage changes
     window.dispatchEvent(new Event('localStorageChange'));
@@ -262,9 +251,6 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       )
     );
     localStorage.setItem('reservations', JSON.stringify(updatedReservations));
-    setReservations(updatedReservations);
-    clearSelection();
-    setEditReservation(null);
     onReservationChange();
     // Dispatch custom event for local storage changes
     window.dispatchEvent(new Event('localStorageChange'));

@@ -26,6 +26,7 @@ const AvailableExcursions: React.FC = () => {
   const [schedules, setSchedules] = useState<DailySchedule[]>([]);
   const [watercraftTypes, setWatercraftTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reservations, setReservations] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchSchedules() {
@@ -60,6 +61,20 @@ const AvailableExcursions: React.FC = () => {
       }
     }
     fetchWatercraftTypes();
+  }, []);
+
+  useEffect(() => {
+    async function fetchReservations() {
+      const { data, error } = await supabase.from('reservations').select('*');
+      if (error) {
+        console.error('Error fetching reservations:', error);
+        setReservations([]);
+      } else {
+        console.log('Fetched reservations from Supabase:', data);
+        setReservations(data || []);
+      }
+    }
+    fetchReservations();
   }, []);
 
   // Generate time slots for calculations
@@ -301,6 +316,7 @@ const AvailableExcursions: React.FC = () => {
                           }
                         : {}
                     }
+                    reservations={reservations.filter(r => r.date === day.date && r.watercraftType === selectedWatercraft)}
                   />
                 </div>
               )}

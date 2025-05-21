@@ -11,16 +11,12 @@ interface DayScheduleProps {
   startTime: string;
   endTime: string;
   watercraft: { [key: string]: { details: Watercraft; timeSlots: any[][] } };
+  reservations: Reservation[];
 }
 
-const DaySchedule: React.FC<DayScheduleProps> = ({ date, dayOfWeek, startTime, endTime, watercraft }) => {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-
+const DaySchedule: React.FC<DayScheduleProps> = ({ date, dayOfWeek, startTime, endTime, watercraft, reservations }) => {
   const handleReservationChange = () => {
-    const savedReservations = localStorage.getItem('reservations');
-    if (savedReservations) {
-      setReservations(JSON.parse(savedReservations));
-    }
+    // No-op or refetch logic can be added here if needed
   };
 
   const watercraftType = Object.keys(watercraft)[0];
@@ -38,6 +34,7 @@ const DaySchedule: React.FC<DayScheduleProps> = ({ date, dayOfWeek, startTime, e
             watercraft={watercraftDetails.details}
             date={date}
             onReservationChange={handleReservationChange}
+            reservations={reservations}
           />
         </div>
       </div>
