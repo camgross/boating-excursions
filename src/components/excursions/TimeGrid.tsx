@@ -64,15 +64,25 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     return slots;
   };
 
+  // Helper to normalize time to 'HH:mm'
+  const normalizeTime = (t: string) => t.length === 5 ? t : t.slice(0,5);
+
   const isSlotBooked = (unitIndex: number, seatIndex: number, time: string) => {
-    return reservations.some(reservation => 
-      reservation.unitIndex === unitIndex && 
-      reservation.seatIndex === seatIndex && 
-      reservation.date === date &&
-      reservation.watercraftType === watercraft.type &&
-      time >= reservation.startTime && 
-      time < reservation.endTime
-    );
+    // Normalize all times to 'HH:mm'
+    const slotTime = normalizeTime(time);
+    return reservations.some(reservation => {
+      // Use reservation.unitIndex directly (already 0-based)
+      const startTime = normalizeTime(reservation.startTime);
+      const endTime = normalizeTime(reservation.endTime);
+      return (
+        reservation.unitIndex === unitIndex &&
+        reservation.seatIndex === seatIndex &&
+        reservation.date === date &&
+        reservation.watercraftType === watercraft.type &&
+        slotTime >= startTime &&
+        slotTime < endTime
+      );
+    });
   };
 
   const handleMouseDown = (unitIndex: number, seatIndex: number, timeIndex: number) => {
@@ -148,8 +158,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       return;
     }
 
-    // Set endTime to the next slot after the last selected time
-    const trueEndTime = getNextTimeSlot(selectedEndTime);
+    // Use the exact selected end time instead of the next slot
+    const trueEndTime = selectedEndTime;
     const normalizedName = reservationName.trim().toLowerCase();
 
     // Helper to check if a reservation is the one being edited
@@ -203,7 +213,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     } else {
       // Add a new reservation
       const newReservation: Reservation = {
-        unitIndex: selectedUnit,
+        unitIndex: selectedUnit + 1,
         seatIndex: selectedSeat,
         startTime: selectedStartTime,
         endTime: trueEndTime,
@@ -266,12 +276,12 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
         r.date === date &&
         r.watercraftType === watercraft.type
       )
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      .sort((a, b) => normalizeTime(a.startTime).localeCompare(normalizeTime(b.startTime)));
 
     // Find which reservation number this time slot belongs to
     let sequence = 0;
     for (const r of seatReservations) {
-      if (time >= r.startTime && time < r.endTime) {
+      if (normalizeTime(time) >= normalizeTime(r.startTime) && normalizeTime(time) < normalizeTime(r.endTime)) {
         return sequence;
       }
       sequence++;
@@ -323,11 +333,11 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                       r.seatIndex === seatIndex &&
                       r.date === date &&
                       r.watercraftType === watercraft.type &&
-                      time >= r.startTime && time < r.endTime
+                      normalizeTime(time) >= normalizeTime(r.startTime) && normalizeTime(time) < normalizeTime(r.endTime)
                     );
                     // Show name only in the top (earliest) block of the reservation
                     let showName = false;
-                    if (reservation && reservation.startTime === time) {
+                    if (reservation && normalizeTime(reservation.startTime) === normalizeTime(time)) {
                       showName = true;
                     }
                     return (
@@ -341,9 +351,9 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                           isBooked
                             ? sequence >= 0  // Only check sequence if it's a booked slot
                               ? sequence % 2 === 0
-                                ? 'bg-blue-500 text-white cursor-not-allowed'
-                                : 'bg-indigo-500 text-white cursor-not-allowed'
-                              : 'bg-blue-500 text-white cursor-not-allowed'  // Fallback for any edge cases
+                                ? 'bg-blue-500 text-white cursor-pointer'
+                                : 'bg-indigo-500 text-white cursor-pointer'
+                              : 'bg-blue-500 text-white cursor-pointer'  // Fallback for any edge cases
                             : isSelected
                               ? 'bg-primary text-white'
                               : 'bg-gray-50 hover:bg-gray-100'

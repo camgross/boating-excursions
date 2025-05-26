@@ -31,36 +31,49 @@ const AvailableExcursions: React.FC = () => {
   useEffect(() => {
     async function fetchSchedules() {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('daily_schedules')
-        .select('*')
-        .order('date', { ascending: true });
-      if (error) {
-        console.error('Error fetching schedules:', error);
+      try {
+        // First fetch watercraft types
+        const { data: typesData, error: typesError } = await supabase.from('watercraft_types').select('*');
+        if (typesError) {
+          console.error('Error fetching watercraft types:', typesError);
+          setWatercraftTypes([]);
+        } else {
+          setWatercraftTypes(typesData || []);
+        }
+
+        // Then fetch schedules
+        const { data, error } = await supabase
+          .from('daily_schedules')
+          .select('*')
+          .order('date', { ascending: true });
+
+        if (error) {
+          console.error('Error fetching schedules:', error);
+          setSchedules([]);
+        } else {
+          const mappedSchedules = (data || []).map((item: any) => ({
+            ...item,
+            startTime: item.start_time,
+            endTime: item.end_time,
+            watercraft: (typesData || []).reduce((acc: any, type: any) => ({
+              ...acc,
+              [type.type]: {
+                details: type,
+                timeSlots: []
+              }
+            }), {})
+          }));
+          console.log('Mapped schedules:', JSON.stringify(mappedSchedules, null, 2));
+          setSchedules(mappedSchedules);
+        }
+      } catch (err) {
+        console.error('Error in fetchSchedules:', err);
         setSchedules([]);
-      } else {
-        setSchedules((data || []).map((item: any) => ({
-          ...item,
-          startTime: item.start_time,
-          endTime: item.end_time,
-        })));
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     fetchSchedules();
-  }, []);
-
-  useEffect(() => {
-    async function fetchWatercraftTypes() {
-      const { data, error } = await supabase.from('watercraft_types').select('*');
-      if (error) {
-        console.error('Error fetching watercraft types:', error);
-        setWatercraftTypes([]);
-      } else {
-        setWatercraftTypes(data || []);
-      }
-    }
-    fetchWatercraftTypes();
   }, []);
 
   useEffect(() => {
@@ -70,12 +83,44 @@ const AvailableExcursions: React.FC = () => {
         console.error('Error fetching reservations:', error);
         setReservations([]);
       } else {
-        console.log('Fetched reservations from Supabase:', data);
-        setReservations(data || []);
+        console.log('Raw reservations from Supabase:', JSON.stringify(data, null, 2));
+        
+        // First fetch watercraft types if not already loaded
+        let types = watercraftTypes;
+        if (types.length === 0) {
+          const { data: typesData, error: typesError } = await supabase.from('watercraft_types').select('*');
+          if (typesError) {
+            console.error('Error fetching watercraft types:', typesError);
+          } else {
+            types = typesData || [];
+            setWatercraftTypes(types);
+            console.log('Watercraft types loaded:', JSON.stringify(types, null, 2));
+          }
+        }
+
+        const mapped = (data || []).map(r => {
+          // Find the watercraft type for this reservation
+          const watercraftType = types.find(w => w.id === r.watercraft_type_id)?.type;
+          console.log(`Mapping reservation ${r.id}: watercraft_type_id ${r.watercraft_type_id} -> type ${watercraftType}`);
+          
+          return {
+            ...r,
+            unitIndex: r.unit_number - 1,
+            seatIndex: r.seat_number - 1,
+            startTime: r.start_time,
+            endTime: r.end_time,
+            firstName: r.first_name,
+            watercraftType: watercraftType, // Map to actual type name
+            userId: r.user_id,
+          };
+        });
+        
+        console.log('Mapped reservations in state:', JSON.stringify(mapped, null, 2));
+        setReservations(mapped);
       }
     }
     fetchReservations();
-  }, []);
+  }, []); // Remove watercraftTypes dependency
 
   // Generate time slots for calculations
   const timeSlots = useMemo(() => {
@@ -301,6 +346,15 @@ const AvailableExcursions: React.FC = () => {
 
               {selectedDate === day.date && selectedWatercraft && (
                 <div className="mt-6">
+                  {(() => {
+                    console.log('Filtering reservations for:', {
+                      date: day.date,
+                      selectedWatercraft,
+                      allReservations: reservations,
+                      watercraftTypes
+                    });
+                    return null;
+                  })()}
                   <DaySchedule
                     date={day.date}
                     dayOfWeek={getDayOfWeek(day.date)}
@@ -310,13 +364,26 @@ const AvailableExcursions: React.FC = () => {
                       selectedWatercraft
                         ? {
                             [selectedWatercraft]: {
-                              details: watercraftTypes.find(w => w.type === selectedWatercraft),
-                              timeSlots: [] // Placeholder for now
+                              details: {
+                                type: selectedWatercraft as "Pontoon" | "SpeedBoat" | "JetSki",
+                                capacity: watercraftTypes.find(w => w.type === selectedWatercraft)?.capacity || 1,
+                                quantity: watercraftTypes.find(w => w.type === selectedWatercraft)?.quantity || 1
+                              },
+                              timeSlots: []
                             }
                           }
                         : {}
                     }
-                    reservations={reservations.filter(r => r.date === day.date && r.watercraftType === selectedWatercraft)}
+                    reservations={reservations.filter(r => {
+                      const matches = r.date === day.date && r.watercraftType === selectedWatercraft;
+                      console.log('Reservation filter check:', {
+                        reservation: r,
+                        date: day.date,
+                        selectedWatercraft,
+                        matches
+                      });
+                      return matches;
+                    })}
                   />
                 </div>
               )}
