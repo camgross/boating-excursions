@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Watercraft, Reservation } from '@/types/excursions';
 import { toast } from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
 
 interface TimeGridProps {
   watercraft: Watercraft;
@@ -86,6 +87,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   };
 
   const handleMouseDown = (unitIndex: number, seatIndex: number, timeIndex: number) => {
+    console.log('Slot clicked:', { unitIndex, seatIndex, timeIndex, time: timeSlots[timeIndex] });
     if (isSlotBooked(unitIndex, seatIndex, timeSlots[timeIndex])) return;
     setDragging(true);
     setDragStart({ unitIndex, seatIndex, timeIndex });
@@ -148,20 +150,16 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     return timeSlots[idx + 1];
   };
 
+  // Helper to check if two time intervals overlap (allow back-to-back)
   const isOverlap = (startA: string, endA: string, startB: string, endB: string) => {
-    return startA < endB && startB < endA;
+    const sA = normalizeTime(startA);
+    const eA = normalizeTime(endA);
+    const sB = normalizeTime(startB);
+    const eB = normalizeTime(endB);
+    return sA < eB && sB < eA;
   };
 
-  const handleSaveReservation = () => {
-    if (!selectedStartTime || !selectedEndTime || selectedUnit === null || selectedSeat === null || !reservationName) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    // Use the exact selected end time instead of the next slot
-    const trueEndTime = selectedEndTime;
-    const normalizedName = reservationName.trim().toLowerCase();
-
+  const handleSaveReservation = async () => {
     // Helper to check if a reservation is the one being edited
     const isEditingThisReservation = (r: Reservation) =>
       editReservation &&
@@ -172,62 +170,151 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       r.date === editReservation.date &&
       r.watercraftType === editReservation.watercraftType;
 
-    // 1. Prevent overlapping reservations for the same seat/unit (exclude the one being edited)
-    const seatConflict = reservations.some(r =>
-      !isEditingThisReservation(r) &&
-      r.unitIndex === selectedUnit &&
-      r.seatIndex === selectedSeat &&
+    console.log('handleSaveReservation called with:', {
+      editReservation,
+      selectedUnit,
+      selectedSeat,
+      selectedStartTime,
+      selectedEndTime,
+      reservationName,
+      date,
+      watercraftId: watercraft.id
+    });
+
+    // Check if any required fields are missing
+    const missingFields = [];
+    if (selectedUnit === null) missingFields.push('selectedUnit');
+    if (selectedSeat === null) missingFields.push('selectedSeat');
+    if (!selectedStartTime) missingFields.push('selectedStartTime');
+    if (!selectedEndTime) missingFields.push('selectedEndTime');
+    if (!reservationName) missingFields.push('reservationName');
+    if (!date) missingFields.push('date');
+    if (!watercraft.id) missingFields.push('watercraftId');
+
+    if (missingFields.length > 0) {
+      console.error('Missing required fields:', missingFields);
+      toast.error(`Please fill in all required fields: ${missingFields.join(', ')}`);
+      return;
+    }
+
+    // At this point, we know all required fields are present
+    const unitNumber = selectedUnit as number;
+    const seatNumber = selectedSeat as number;
+    const startTime = selectedStartTime as string;
+    const endTime = selectedEndTime as string;
+
+    // Debug logging for overlap check
+    reservations.forEach(r => {
+      if (
+        r.unitIndex === unitNumber &&
+        r.seatIndex === seatNumber &&
+        r.date === date &&
+        r.watercraftType === watercraft.type
+      ) {
+        console.log('Comparing with existing reservation:', {
+          rStart: r.startTime,
+          rEnd: r.endTime,
+          newStart: startTime,
+          newEnd: endTime,
+          overlap: isOverlap(r.startTime, r.endTime, startTime, endTime)
+        });
+      }
+    });
+
+    // Check for overlapping reservations for the same seat/unit
+    const hasOverlap = reservations.some(r =>
+      r.unitIndex === unitNumber &&
+      r.seatIndex === seatNumber &&
       r.date === date &&
       r.watercraftType === watercraft.type &&
-      isOverlap(selectedStartTime, trueEndTime, r.startTime, r.endTime)
+      isOverlap(r.startTime, r.endTime, startTime, endTime) &&
+      !isEditingThisReservation(r)
     );
-    if (seatConflict) {
-      toast.error('This seat is already reserved for the selected time.');
+
+    if (hasOverlap) {
+      console.error('Overlapping reservation found for same seat/unit');
+      toast.error('This time slot overlaps with an existing reservation for this seat.');
       return;
     }
 
-    // 2. Prevent the same user from having overlapping reservations on the same day across all boats/seats (exclude the one being edited)
-    const userConflict = reservations.some(r =>
-      !isEditingThisReservation(r) &&
+    // Check for overlapping reservations for the same user across all boats/seats
+    const hasUserOverlap = reservations.some(r =>
       r.date === date &&
-      r.firstName.trim().toLowerCase() === normalizedName &&
-      isOverlap(selectedStartTime, trueEndTime, r.startTime, r.endTime)
+      r.watercraftType === watercraft.type &&
+      isOverlap(r.startTime, r.endTime, startTime, endTime) &&
+      !isEditingThisReservation(r)
     );
-    if (userConflict) {
-      toast.error('You already have a reservation at this time.');
+
+    if (hasUserOverlap) {
+      console.error('Overlapping reservation found for same user');
+      toast.error('You already have a reservation during this time.');
       return;
     }
 
-    let updatedReservations;
-    if (editReservation) {
-      // Update the existing reservation
-      updatedReservations = reservations.map(r =>
-        isEditingThisReservation(r)
-          ? {
-              ...r,
-              firstName: reservationName,
-              // Optionally allow changing other fields in the future
-            }
-          : r
-      );
-    } else {
-      // Add a new reservation
-      const newReservation: Reservation = {
-        unitIndex: selectedUnit + 1,
-        seatIndex: selectedSeat,
-        startTime: selectedStartTime,
-        endTime: trueEndTime,
-        firstName: reservationName,
-        date: date,
-        watercraftType: watercraft.type
-      };
-      updatedReservations = [...reservations, newReservation];
+    try {
+      if (editReservation) {
+        console.log('Updating existing reservation:', editReservation.id);
+        const { data, error } = await supabase
+          .from('reservations')
+          .update({
+            first_name: reservationName,
+            start_time: startTime,
+            end_time: endTime,
+            unit_number: unitNumber + 1,
+            seat_number: seatNumber + 1,
+            watercraft_type_id: watercraft.id
+          })
+          .eq('id', editReservation.id)
+          .select();
+
+        if (error) {
+          console.error('Error updating reservation:', error);
+          throw error;
+        }
+
+        console.log('Updated reservation:', data);
+        toast.success('Reservation updated successfully.');
+      } else {
+        console.log('Creating new reservation with data:', {
+          first_name: reservationName,
+          start_time: startTime,
+          end_time: endTime,
+          unit_number: unitNumber + 1,
+          seat_number: seatNumber + 1,
+          watercraft_type_id: watercraft.id,
+          date: date,
+          user_id: null // Explicitly set user_id to null for new reservations
+        });
+
+        const { data, error } = await supabase
+          .from('reservations')
+          .insert({
+            first_name: reservationName,
+            start_time: startTime,
+            end_time: endTime,
+            unit_number: unitNumber + 1,
+            seat_number: seatNumber + 1,
+            watercraft_type_id: watercraft.id,
+            date: date,
+            user_id: null // Explicitly set user_id to null for new reservations
+          })
+          .select();
+
+        if (error) {
+          console.error('Error creating reservation:', error);
+          throw error;
+        }
+
+        console.log('Created reservation:', data);
+        toast.success('Reservation created successfully.');
+      }
+
+      onReservationChange();
+      clearSelection();
+    } catch (error) {
+      console.error('Error saving reservation:', error);
+      toast.error('Failed to save reservation. Please try again.');
     }
-    localStorage.setItem('reservations', JSON.stringify(updatedReservations));
-    onReservationChange();
-    // Dispatch custom event for local storage changes
-    window.dispatchEvent(new Event('localStorageChange'));
-    toast.success('Reservation saved successfully!');
   };
 
   const openEditModal = (reservation: Reservation) => {
@@ -248,23 +335,24 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     setIsModalOpen(true);
   };
 
-  const handleDeleteReservation = () => {
+  const handleDeleteReservation = async () => {
     if (!editReservation) return;
-    const updatedReservations = reservations.filter(r =>
-      !(
-        r.unitIndex === editReservation.unitIndex &&
-        r.seatIndex === editReservation.seatIndex &&
-        r.startTime === editReservation.startTime &&
-        r.endTime === editReservation.endTime &&
-        r.date === editReservation.date &&
-        r.watercraftType === editReservation.watercraftType
-      )
-    );
-    localStorage.setItem('reservations', JSON.stringify(updatedReservations));
-    onReservationChange();
-    // Dispatch custom event for local storage changes
-    window.dispatchEvent(new Event('localStorageChange'));
-    toast.success('Reservation deleted.');
+    
+    try {
+      const { error } = await supabase
+        .from('reservations')
+        .delete()
+        .eq('id', editReservation.id);
+
+      if (error) throw error;
+
+      onReservationChange();
+      toast.success('Reservation deleted.');
+      clearSelection();
+    } catch (error) {
+      console.error('Error deleting reservation:', error);
+      toast.error('Failed to delete reservation. Please try again.');
+    }
   };
 
   const getReservationSequence = (unitIndex: number, seatIndex: number, time: string) => {
@@ -396,41 +484,52 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                 )}
               </div>
             )}
-            <h3 className="text-lg font-semibold mb-4">{editReservation ? 'Edit Reservation' : 'Make Reservation'}</h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                First Name
-              </label>
-              <input
-                type="text"
-                value={reservationName}
-                onChange={(e) => setReservationName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Enter your first name"
-              />
-            </div>
-            <div className="flex justify-end gap-4">
-              <button
-                onClick={handleCancelReservation}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              {editReservation && (
+            <h2 className="text-xl font-bold mb-4">
+              {editReservation ? 'Edit Reservation' : 'New Reservation'}
+            </h2>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              console.log('Form submitted');
+              await handleSaveReservation();
+            }}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  First Name
+                </label>
+                <input
+                  type="text"
+                  value={reservationName}
+                  onChange={(e) => setReservationName(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="Enter your first name"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-4">
                 <button
-                  onClick={handleDeleteReservation}
-                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  type="button"
+                  onClick={handleCancelReservation}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
                 >
-                  Delete Reservation
+                  Cancel
                 </button>
-              )}
-              <button
-                onClick={handleSaveReservation}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
-              >
-                Save Reservation
-              </button>
-            </div>
+                {editReservation && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteReservation}
+                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  >
+                    Delete Reservation
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
+                >
+                  Save Reservation
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -438,4 +537,4 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   );
 };
 
-export default TimeGrid; 
+export default TimeGrid;
