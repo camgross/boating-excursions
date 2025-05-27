@@ -69,10 +69,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   const normalizeTime = (t: string) => t.length === 5 ? t : t.slice(0,5);
 
   const isSlotBooked = (unitIndex: number, seatIndex: number, time: string) => {
-    // Normalize all times to 'HH:mm'
     const slotTime = normalizeTime(time);
-    return reservations.some(reservation => {
-      // Use reservation.unitIndex directly (already 0-based)
+    const match = reservations.find(reservation => {
       const startTime = normalizeTime(reservation.startTime);
       const endTime = normalizeTime(reservation.endTime);
       return (
@@ -84,6 +82,10 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
         slotTime < endTime
       );
     });
+    if (match) {
+      console.log('Slot booked by reservation:', match, { unitIndex, seatIndex, slotTime });
+    }
+    return !!match;
   };
 
   const handleMouseDown = (unitIndex: number, seatIndex: number, timeIndex: number) => {
@@ -201,7 +203,38 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     const unitNumber = selectedUnit as number;
     const seatNumber = selectedSeat as number;
     const startTime = selectedStartTime as string;
-    const endTime = selectedEndTime as string;
+    let endTime = selectedEndTime as string;
+
+    // If the reservation is a single slot, set endTime to the next slot
+    if (startTime === endTime) {
+      const idx = timeSlots.indexOf(startTime);
+      if (idx === timeSlots.length - 1) {
+        // Last slot, use schedule's end time
+        const { endTime: scheduleEndTime } = getOperatingHours();
+        endTime = scheduleEndTime;
+      } else {
+        endTime = timeSlots[idx + 1];
+      }
+    }
+
+    // If the selection covers more than one slot, set endTime to the slot after the last selected slot
+    const startIdx = timeSlots.indexOf(startTime);
+    const endIdx = timeSlots.indexOf(endTime);
+    if (endIdx > startIdx) {
+      if (endIdx === timeSlots.length - 1) {
+        // Last slot, use schedule's end time
+        const { endTime: scheduleEndTime } = getOperatingHours();
+        endTime = scheduleEndTime;
+      } else {
+        endTime = timeSlots[endIdx + 1];
+      }
+    }
+
+    // If the selected end time is the last slot, set endTime to the schedule's true end time
+    if (endTime === timeSlots[timeSlots.length - 1]) {
+      const { endTime: scheduleEndTime } = getOperatingHours();
+      endTime = scheduleEndTime;
+    }
 
     // Debug logging for overlap check
     reservations.forEach(r => {
@@ -238,9 +271,10 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     }
 
     // Check for overlapping reservations for the same user across all boats/seats
-    const hasUserOverlap = reservations.some(r =>
-      r.date === date &&
-      r.firstName === reservationName && // Only check for the same user
+    // Use all reservations for the date, not just the current watercraft
+    const allReservationsForDate = reservations.filter(r => r.date === date);
+    const hasUserOverlap = allReservationsForDate.some(r =>
+      r.firstName.toLowerCase() === reservationName.toLowerCase() && // Case-insensitive check
       isOverlap(r.startTime, r.endTime, startTime, endTime) &&
       !isEditingThisReservation(r)
     );
