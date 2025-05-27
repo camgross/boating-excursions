@@ -76,51 +76,56 @@ const AvailableExcursions: React.FC = () => {
     fetchSchedules();
   }, []);
 
-  useEffect(() => {
-    async function fetchReservations() {
-      const { data, error } = await supabase.from('reservations').select('*');
-      if (error) {
-        console.error('Error fetching reservations:', error);
-        setReservations([]);
-      } else {
-        console.log('Raw reservations from Supabase:', JSON.stringify(data, null, 2));
-        
-        // First fetch watercraft types if not already loaded
-        let types = watercraftTypes;
-        if (types.length === 0) {
-          const { data: typesData, error: typesError } = await supabase.from('watercraft_types').select('*');
-          if (typesError) {
-            console.error('Error fetching watercraft types:', typesError);
-          } else {
-            types = typesData || [];
-            setWatercraftTypes(types);
-            console.log('Watercraft types loaded:', JSON.stringify(types, null, 2));
-          }
+  const fetchReservations = async () => {
+    const { data, error } = await supabase.from('reservations').select('*');
+    if (error) {
+      console.error('Error fetching reservations:', error);
+      setReservations([]);
+    } else {
+      console.log('Raw reservations from Supabase:', JSON.stringify(data, null, 2));
+      
+      // First fetch watercraft types if not already loaded
+      let types = watercraftTypes;
+      if (types.length === 0) {
+        const { data: typesData, error: typesError } = await supabase.from('watercraft_types').select('*');
+        if (typesError) {
+          console.error('Error fetching watercraft types:', typesError);
+        } else {
+          types = typesData || [];
+          setWatercraftTypes(types);
+          console.log('Watercraft types loaded:', JSON.stringify(types, null, 2));
         }
-
-        const mapped = (data || []).map(r => {
-          // Find the watercraft type for this reservation
-          const watercraftType = types.find(w => w.id === r.watercraft_type_id)?.type;
-          console.log(`Mapping reservation ${r.id}: watercraft_type_id ${r.watercraft_type_id} -> type ${watercraftType}`);
-          
-          return {
-            ...r,
-            unitIndex: r.unit_number - 1,
-            seatIndex: r.seat_number - 1,
-            startTime: r.start_time,
-            endTime: r.end_time,
-            firstName: r.first_name,
-            watercraftType: watercraftType, // Map to actual type name
-            userId: r.user_id,
-          };
-        });
-        
-        console.log('Mapped reservations in state:', JSON.stringify(mapped, null, 2));
-        setReservations(mapped);
       }
+
+      const mapped = (data || []).map(r => {
+        // Find the watercraft type for this reservation
+        const watercraftType = types.find(w => w.id === r.watercraft_type_id)?.type;
+        console.log(`Mapping reservation ${r.id}: watercraft_type_id ${r.watercraft_type_id} -> type ${watercraftType}`);
+        
+        return {
+          ...r,
+          unitIndex: r.unit_number - 1,
+          seatIndex: r.seat_number - 1,
+          startTime: r.start_time,
+          endTime: r.end_time,
+          firstName: r.first_name,
+          watercraftType: watercraftType, // Map to actual type name
+          userId: r.user_id,
+        };
+      });
+      
+      console.log('Mapped reservations in state:', JSON.stringify(mapped, null, 2));
+      setReservations(mapped);
     }
+  };
+
+  useEffect(() => {
     fetchReservations();
-  }, []); // Remove watercraftTypes dependency
+  }, []);
+
+  const handleReservationChange = () => {
+    fetchReservations();
+  };
 
   // Generate time slots for calculations
   const timeSlots = useMemo(() => {
@@ -159,113 +164,57 @@ const AvailableExcursions: React.FC = () => {
 
   // Calculate availability percentages for each watercraft on each day
   const calculateAvailability = useCallback(() => {
-    const savedReservations = localStorage.getItem('reservations');
-    const reservations = savedReservations ? JSON.parse(savedReservations) : [];
-    console.log('DEBUG: Current reservations:', reservations);
-    
     const newAvailabilityMap: {[key: string]: number} = {};
     
-    // scheduleData.forEach(day => {
-    //   // Generate time slots for this specific day
-    //   const dayTimeSlots: string[] = [];
-    //   const [startHour, startMinute] = day.startTime.split(':').map(Number);
-    //   const [endHour, endMinute] = day.endTime.split(':').map(Number);
-    //   
-    //   let currentHour = startHour;
-    //   let currentMinute = startMinute;
-    //   
-    //   while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
-    //     dayTimeSlots.push(`${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`);
-    //     currentMinute += 15;
-    //     if (currentMinute >= 60) {
-    //       currentHour += 1;
-    //       currentMinute = 0;
-    //     }
-    //   }
+    schedules.forEach(day => {
+      Object.entries(day.watercraft).forEach(([key, craft]) => {
+        // Calculate total seat-slots (all seats for all time slots)
+        const totalTimeSlots = timeSlots.length;
+        const totalSeats = (craft.details.quantity || 1) * craft.details.capacity;
+        const totalAvailableSlots = totalTimeSlots * totalSeats;
+        
+        // Count booked slots by checking each seat in each time slot
+        const dayReservations = reservations.filter((r: any) => 
+          r.date === day.date && 
+          r.watercraftType === craft.details.type
+        );
 
-    //   console.log(`DEBUG: Day ${day.date} has ${dayTimeSlots.length} time slots:`, dayTimeSlots);
-
-    //   Object.entries(day.watercraft).forEach(([key, craft]) => {
-    //     // Calculate total seat-slots (all seats for all time slots)
-    //     const totalTimeSlots = dayTimeSlots.length;
-    //     const totalSeats = (craft.details.quantity || 1) * craft.details.capacity;
-    //     const totalAvailableSlots = totalTimeSlots * totalSeats;
-    //     
-    //     // Count booked slots by checking each seat in each time slot
-    //     const dayReservations = reservations.filter((r: any) => 
-    //       r.date === day.date && 
-    //       r.watercraftType === craft.details.type
-    //     );
-
-    //     console.log(`DEBUG: ${day.date} ${key} has ${dayReservations.length} reservations:`, dayReservations);
-    //     
-    //     let totalBookedSlots = 0;
-    //     
-    //     // For each time slot
-    //     dayTimeSlots.forEach(timeSlot => {
-    //       // For each unit
-    //       for (let unitIndex = 0; unitIndex < (craft.details.quantity || 1); unitIndex++) {
-    //         // For each seat in the unit
-    //         for (let seatIndex = 0; seatIndex < craft.details.capacity; seatIndex++) {
-    //           // Check if this specific seat is booked in this time slot
-    //           const isBooked = dayReservations.some((reservation: { unitIndex: number; seatIndex: number; startTime: string; endTime: string }) => 
-    //             reservation.unitIndex === unitIndex &&
-    //             reservation.seatIndex === seatIndex &&
-    //             timeSlot >= reservation.startTime &&
-    //             timeSlot < reservation.endTime
-    //           );
-    //           
-    //           if (isBooked) {
-    //             totalBookedSlots++;
-    //           }
-    //         }
-    //       }
-    //     });
-    //     
-    //     const availabilityKey = `${day.date}-${key}`;
-    //     const availability = Math.round(((totalAvailableSlots - totalBookedSlots) / totalAvailableSlots) * 100);
-    //     newAvailabilityMap[availabilityKey] = Math.max(0, Math.min(100, availability));
-
-    //     console.log(`DEBUG: ${day.date} ${key} availability calculation:`, {
-    //       date: day.date,
-    //       watercraftType: key,
-    //       totalTimeSlots,
-    //       totalSeats,
-    //       totalAvailableSlots,
-    //       totalBookedSlots,
-    //       availability: newAvailabilityMap[availabilityKey],
-    //       operatingHours: `${day.startTime}-${day.endTime}`
-    //     });
-    //   });
-    // });
+        let totalBookedSlots = 0;
+        
+        // For each time slot
+        timeSlots.forEach(timeSlot => {
+          // For each unit
+          for (let unitIndex = 0; unitIndex < (craft.details.quantity || 1); unitIndex++) {
+            // For each seat in the unit
+            for (let seatIndex = 0; seatIndex < craft.details.capacity; seatIndex++) {
+              // Check if this specific seat is booked in this time slot
+              const isBooked = dayReservations.some((reservation: { unitIndex: number; seatIndex: number; startTime: string; endTime: string }) => 
+                reservation.unitIndex === unitIndex &&
+                reservation.seatIndex === seatIndex &&
+                timeSlot >= reservation.startTime &&
+                timeSlot < reservation.endTime
+              );
+              
+              if (isBooked) {
+                totalBookedSlots++;
+              }
+            }
+          }
+        });
+        
+        const availabilityKey = `${day.date}-${key}`;
+        const availability = Math.round(((totalAvailableSlots - totalBookedSlots) / totalAvailableSlots) * 100);
+        newAvailabilityMap[availabilityKey] = Math.max(0, Math.min(100, availability));
+      });
+    });
     
     setAvailabilityMap(newAvailabilityMap);
-  }, []);
+  }, [schedules, reservations, timeSlots]);
 
-  // Calculate availability on mount and when reservations change
+  // Calculate availability when schedules or reservations change
   useEffect(() => {
     calculateAvailability();
-    
-    // Set up storage event listener for changes from other windows/tabs
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'reservations') {
-        calculateAvailability();
-      }
-    };
-
-    // Set up a custom event listener for changes in the current window
-    const handleLocalStorageChange = () => {
-      calculateAvailability();
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('localStorageChange', handleLocalStorageChange);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('localStorageChange', handleLocalStorageChange);
-    };
-  }, []);
+  }, [calculateAvailability]);
 
   console.log('DEBUG: scheduleData at render', schedules);
   console.log('Schedules being rendered:', schedules);
@@ -346,15 +295,6 @@ const AvailableExcursions: React.FC = () => {
 
               {selectedDate === day.date && selectedWatercraft && (
                 <div className="mt-6">
-                  {(() => {
-                    console.log('Filtering reservations for:', {
-                      date: day.date,
-                      selectedWatercraft,
-                      allReservations: reservations,
-                      watercraftTypes
-                    });
-                    return null;
-                  })()}
                   <DaySchedule
                     date={day.date}
                     dayOfWeek={getDayOfWeek(day.date)}
@@ -365,6 +305,7 @@ const AvailableExcursions: React.FC = () => {
                         ? {
                             [selectedWatercraft]: {
                               details: {
+                                id: watercraftTypes.find(w => w.type === selectedWatercraft)?.id || 0,
                                 type: selectedWatercraft as "Pontoon" | "SpeedBoat" | "JetSki",
                                 capacity: watercraftTypes.find(w => w.type === selectedWatercraft)?.capacity || 1,
                                 quantity: watercraftTypes.find(w => w.type === selectedWatercraft)?.quantity || 1
@@ -374,16 +315,8 @@ const AvailableExcursions: React.FC = () => {
                           }
                         : {}
                     }
-                    reservations={reservations.filter(r => {
-                      const matches = r.date === day.date && r.watercraftType === selectedWatercraft;
-                      console.log('Reservation filter check:', {
-                        reservation: r,
-                        date: day.date,
-                        selectedWatercraft,
-                        matches
-                      });
-                      return matches;
-                    })}
+                    reservations={reservations.filter(r => r.date === day.date)}
+                    onReservationChange={handleReservationChange}
                   />
                 </div>
               )}
