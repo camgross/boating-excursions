@@ -1,4 +1,5 @@
 export interface Watercraft {
+  id: number;
   type: 'Pontoon' | 'SpeedBoat' | 'JetSki';
   capacity: number;
   quantity?: number; // For multiple units like jet skis
@@ -12,6 +13,7 @@ export interface TimeSlot {
 }
 
 export interface Reservation {
+  id?: number;
   unitIndex: number;
   seatIndex: number;
   startTime: string;
@@ -19,6 +21,8 @@ export interface Reservation {
   firstName: string;
   date: string;
   watercraftType: string;
+  watercraftTypeId: number;
+  userId?: string;
 }
 
 export interface DailySchedule {

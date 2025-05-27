@@ -240,7 +240,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     // Check for overlapping reservations for the same user across all boats/seats
     const hasUserOverlap = reservations.some(r =>
       r.date === date &&
-      r.watercraftType === watercraft.type &&
+      r.firstName === reservationName && // Only check for the same user
       isOverlap(r.startTime, r.endTime, startTime, endTime) &&
       !isEditingThisReservation(r)
     );
@@ -339,13 +339,18 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     if (!editReservation) return;
     
     try {
+      console.log('Attempting to delete reservation:', editReservation);
       const { error } = await supabase
         .from('reservations')
         .delete()
         .eq('id', editReservation.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting reservation:', error);
+        throw error;
+      }
 
+      console.log('Successfully deleted reservation with id:', editReservation.id);
       onReservationChange();
       toast.success('Reservation deleted.');
       clearSelection();
