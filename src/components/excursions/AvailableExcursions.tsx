@@ -130,24 +130,22 @@ const AvailableExcursions: React.FC = () => {
   // Generate time slots for calculations
   const timeSlots = useMemo(() => {
     const allTimeSlots: string[] = [];
-    // scheduleData.forEach(day => {
-    //   const [startHour, startMinute] = day.startTime.split(':').map(Number);
-    //   const [endHour, endMinute] = day.endTime.split(':').map(Number);
-    //   
-    //   let currentHour = startHour;
-    //   let currentMinute = startMinute;
-    //   
-    //   while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
-    //     allTimeSlots.push(`${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`);
-    //     currentMinute += 15;
-    //     if (currentMinute >= 60) {
-    //       currentHour += 1;
-    //       currentMinute = 0;
-    //     }
-    //   }
-    // });
+    schedules.forEach(day => {
+      const [startHour, startMinute] = day.startTime.split(':').map(Number);
+      const [endHour, endMinute] = day.endTime.split(':').map(Number);
+      let currentHour = startHour;
+      let currentMinute = startMinute;
+      while (currentHour < endHour || (currentHour === endHour && currentMinute < endMinute)) {
+        allTimeSlots.push(`${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`);
+        currentMinute += 15;
+        if (currentMinute >= 60) {
+          currentHour += 1;
+          currentMinute = 0;
+        }
+      }
+    });
     return Array.from(new Set(allTimeSlots));
-  }, []);
+  }, [schedules]);
 
   // Helper function to get the next time slot
   const getNextTimeSlot = (time: string) => {
@@ -168,8 +166,17 @@ const AvailableExcursions: React.FC = () => {
     
     schedules.forEach(day => {
       Object.entries(day.watercraft).forEach(([key, craft]) => {
-        // Calculate total seat-slots (all seats for all time slots)
-        const totalTimeSlots = timeSlots.length;
+        // Generate time slots for this day and watercraft
+        const [startHour, startMinute] = day.startTime.split(':').map(Number);
+        const [endHour, endMinute] = day.endTime.split(':').map(Number);
+        const slots: string[] = [];
+        let current = new Date(0, 0, 0, startHour, startMinute);
+        const end = new Date(0, 0, 0, endHour, endMinute);
+        while (current < end) {
+          slots.push(`${current.getHours().toString().padStart(2, '0')}:${current.getMinutes().toString().padStart(2, '0')}`);
+          current.setMinutes(current.getMinutes() + 15);
+        }
+        const totalTimeSlots = slots.length;
         const totalSeats = (craft.details.quantity || 1) * craft.details.capacity;
         const totalAvailableSlots = totalTimeSlots * totalSeats;
         
@@ -179,37 +186,57 @@ const AvailableExcursions: React.FC = () => {
           r.watercraftType === craft.details.type
         );
 
+        // Debug logging for slot and reservation math
+        console.log(`\n[DEBUG] ${day.date} - ${craft.details.type}`);
+        console.log('Total slots:', slots);
+        console.log('Total seats:', totalSeats);
+        console.log('Total available slots:', totalAvailableSlots);
+        console.log('Reservations:', dayReservations);
+
         let totalBookedSlots = 0;
         
         // For each time slot
-        timeSlots.forEach(timeSlot => {
+        slots.forEach(timeSlot => {
           // For each unit
           for (let unitIndex = 0; unitIndex < (craft.details.quantity || 1); unitIndex++) {
             // For each seat in the unit
             for (let seatIndex = 0; seatIndex < craft.details.capacity; seatIndex++) {
-              // Check if this specific seat is booked in this time slot
-              const isBooked = dayReservations.some((reservation: { unitIndex: number; seatIndex: number; startTime: string; endTime: string }) => 
-                reservation.unitIndex === unitIndex &&
-                reservation.seatIndex === seatIndex &&
-                timeSlot >= reservation.startTime &&
-                timeSlot < reservation.endTime
-              );
-              
+              // Helper to normalize time to 'HH:mm'
+              const normalizeTime = (t: string) => t.slice(0, 5);
+              const isBooked = dayReservations.some((reservation: { unitIndex: number; seatIndex: number; startTime: string; endTime: string }) => {
+                const slotTime = normalizeTime(timeSlot);
+                const resStart = normalizeTime(reservation.startTime);
+                const resEnd = normalizeTime(reservation.endTime);
+                const match = reservation.unitIndex === unitIndex &&
+                  reservation.seatIndex === seatIndex &&
+                  slotTime >= resStart &&
+                  (
+                    slotTime < resEnd ||
+                    (slotTime === normalizeTime(slots[slots.length - 1]) && resEnd === day.endTime)
+                  );
+                if (match) {
+                  console.log(`[BOOKED] Slot: ${slotTime}, Unit: ${unitIndex}, Seat: ${seatIndex}, Reservation: [${resStart} - ${resEnd}]`);
+                } else {
+                  console.log(`[NOT BOOKED] Slot: ${slotTime}, Unit: ${unitIndex}, Seat: ${seatIndex}, Reservation: [${resStart} - ${resEnd}]`);
+                }
+                return match;
+              });
               if (isBooked) {
                 totalBookedSlots++;
               }
             }
           }
         });
+        console.log('Total booked slots:', totalBookedSlots);
         
         const availabilityKey = `${day.date}-${key}`;
-        const availability = Math.round(((totalAvailableSlots - totalBookedSlots) / totalAvailableSlots) * 100);
+        const availability = totalAvailableSlots === 0 ? 0 : Math.round(((totalAvailableSlots - totalBookedSlots) / totalAvailableSlots) * 100);
         newAvailabilityMap[availabilityKey] = Math.max(0, Math.min(100, availability));
       });
     });
     
     setAvailabilityMap(newAvailabilityMap);
-  }, [schedules, reservations, timeSlots]);
+  }, [schedules, reservations]);
 
   // Calculate availability when schedules or reservations change
   useEffect(() => {
