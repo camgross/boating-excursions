@@ -100,14 +100,13 @@ const AvailableExcursions: React.FC = () => {
       const mapped = (data || []).map(r => {
         // Find the watercraft type for this reservation
         const watercraftType = types.find(w => w.id === r.watercraft_type_id)?.type;
-        console.log(`Mapping reservation ${r.id}: watercraft_type_id ${r.watercraft_type_id} -> type ${watercraftType}`);
-        
+        const normalizeTime = (t: string) => t.length === 5 ? t : t.slice(0,5);
         return {
           ...r,
           unitIndex: r.unit_number - 1,
           seatIndex: r.seat_number - 1,
-          startTime: r.start_time,
-          endTime: r.end_time,
+          startTime: normalizeTime(r.start_time),
+          endTime: normalizeTime(r.end_time),
           firstName: r.first_name,
           watercraftType: watercraftType, // Map to actual type name
           userId: r.user_id,
