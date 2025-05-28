@@ -303,13 +303,14 @@ const AvailableExcursions: React.FC = () => {
                         setSelectedWatercraft(craft.type);
                       }
                     }}
-                    className={`px-6 py-3 rounded-lg transition-colors ${
-                      selectedDate === day.date && selectedWatercraft === craft.type
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 hover:bg-gray-200'
-                    } flex flex-col items-start relative`}
+                    className={`px-6 pt-4 pb-3 rounded-lg transition-colors bg-gray-100 hover:bg-gray-200 flex flex-col items-start relative`}
+                    style={{ minWidth: 180 }}
                   >
-                    <div className="font-semibold">{craft.type}</div>
+                    {/* Blue bar for selected state */}
+                    {selectedDate === day.date && selectedWatercraft === craft.type && (
+                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-primary rounded-t-lg" />
+                    )}
+                    <div className="font-semibold mt-1">{craft.type}</div>
                     <div className="text-sm opacity-90">
                       {craft.capacity} {craft.capacity === 1 ? 'person' : 'persons'}
                       {craft.quantity && ` • ${craft.quantity} available`}
