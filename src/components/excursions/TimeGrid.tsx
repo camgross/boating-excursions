@@ -70,10 +70,25 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
 
   const isSlotBooked = (unitIndex: number, seatIndex: number, time: string) => {
     const slotTime = normalizeTime(time);
+    console.log('[isSlotBooked] Checking slot:', {
+      unitIndex,
+      seatIndex,
+      slotTime,
+      date,
+      watercraftType: watercraft.type,
+      reservations: reservations.map(r => ({
+        unitIndex: r.unitIndex,
+        seatIndex: r.seatIndex,
+        date: r.date,
+        watercraftType: r.watercraftType,
+        startTime: r.startTime,
+        endTime: r.endTime
+      }))
+    });
     const match = reservations.find(reservation => {
       const startTime = normalizeTime(reservation.startTime);
       const endTime = normalizeTime(reservation.endTime);
-      return (
+      const isMatch = (
         reservation.unitIndex === unitIndex &&
         reservation.seatIndex === seatIndex &&
         reservation.date === date &&
@@ -81,9 +96,18 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
         slotTime >= startTime &&
         slotTime < endTime
       );
+      if (isMatch) {
+        console.log('[isSlotBooked] Found matching reservation:', {
+          reservation,
+          slotTime,
+          startTime,
+          endTime
+        });
+      }
+      return isMatch;
     });
     if (match) {
-      console.log('Slot booked by reservation:', match, { unitIndex, seatIndex, slotTime });
+      console.log('[isSlotBooked] Slot is booked by reservation:', match);
     }
     return !!match;
   };
@@ -132,6 +156,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     setSelectedUnit(null);
     setSelectedSeat(null);
     setReservationName('');
+    setEditReservation(null);
     setIsModalOpen(false);
   };
 
@@ -344,7 +369,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
           throw error;
         }
 
-        console.log('Created reservation:', data);
+        console.log('Created reservation response:', { data, error });
         toast.success('Reservation created successfully.');
       }
 
