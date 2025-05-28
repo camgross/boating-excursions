@@ -277,7 +277,10 @@ const AvailableExcursions: React.FC = () => {
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 bg-yellow-100 text-xs p-2 z-50 border-b border-yellow-400" style={{maxHeight: '30vh', overflow: 'auto'}}>
+      <div style={{background: 'red', color: 'white', fontWeight: 'bold', fontSize: '2rem', textAlign: 'center', padding: '1rem', zIndex: 10000, position: 'fixed', top: 0, left: 0, right: 0}}>
+        PROD TEST
+      </div>
+      <div className="fixed top-0 left-0 right-0 bg-yellow-100 text-xs p-2 z-50 border-b border-yellow-400" style={{maxHeight: '30vh', overflow: 'auto', marginTop: '4.5rem'}}>
         <strong>DEBUG:</strong>
         <pre style={{whiteSpace: 'pre-wrap'}}>{JSON.stringify({
           availabilityMap,
@@ -287,7 +290,7 @@ const AvailableExcursions: React.FC = () => {
           debugReservations
         }, null, 2)}</pre>
       </div>
-      <div className="container mx-auto px-4 py-8" style={{marginTop: '10vh'}}>
+      <div className="container mx-auto px-4 py-8" style={{marginTop: '14vh'}}>
         <h2 className="text-3xl font-bold mb-8">Available Excursions</h2>
         <div className="grid grid-cols-1 gap-8">
           {schedules.map((day) => (
