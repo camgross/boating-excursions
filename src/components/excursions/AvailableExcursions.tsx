@@ -102,6 +102,7 @@ const AvailableExcursions: React.FC = () => {
         const watercraftType = types.find(w => w.id === r.watercraft_type_id)?.type;
         const normalizeTime = (t: string) => t.length === 5 ? t : t.slice(0,5);
         return {
+          id: r.id,
           ...r,
           unitIndex: r.unit_number - 1,
           seatIndex: r.seat_number - 1,
