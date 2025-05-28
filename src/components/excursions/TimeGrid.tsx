@@ -215,18 +215,18 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       } else {
         endTime = timeSlots[idx + 1];
       }
-    }
-
-    // If the selection covers more than one slot, set endTime to the slot after the last selected slot
-    const startIdx = timeSlots.indexOf(startTime);
-    const endIdx = timeSlots.indexOf(endTime);
-    if (endIdx > startIdx) {
-      if (endIdx === timeSlots.length - 1) {
-        // Last slot, use schedule's end time
-        const { endTime: scheduleEndTime } = getOperatingHours();
-        endTime = scheduleEndTime;
-      } else {
-        endTime = timeSlots[endIdx + 1];
+    } else {
+      // If the selection covers more than one slot, set endTime to the slot after the last selected slot
+      const startIdx = timeSlots.indexOf(startTime);
+      const endIdx = timeSlots.indexOf(endTime);
+      if (endIdx > startIdx) {
+        if (endIdx === timeSlots.length - 1) {
+          // Last slot, use schedule's end time
+          const { endTime: scheduleEndTime } = getOperatingHours();
+          endTime = scheduleEndTime;
+        } else {
+          endTime = timeSlots[endIdx + 1];
+        }
       }
     }
 
@@ -244,12 +244,17 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
         r.date === date &&
         r.watercraftType === watercraft.type
       ) {
-        console.log('Comparing with existing reservation:', {
-          rStart: r.startTime,
-          rEnd: r.endTime,
-          newStart: startTime,
-          newEnd: endTime,
-          overlap: isOverlap(r.startTime, r.endTime, startTime, endTime)
+        const sA = normalizeTime(r.startTime);
+        const eA = normalizeTime(r.endTime);
+        const sB = normalizeTime(startTime);
+        const eB = normalizeTime(endTime);
+        const overlap = isOverlap(r.startTime, r.endTime, startTime, endTime);
+        console.log('[OVERLAP DEBUG]', {
+          existing: { sA, eA },
+          newRes: { sB, eB },
+          overlap,
+          r,
+          new: { unitNumber, seatNumber, date, watercraftType: watercraft.type, startTime, endTime }
         });
       }
     });
