@@ -294,6 +294,21 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     // Check for overlapping reservations for the same user across all boats/seats
     // Use all reservations for the date, not just the current watercraft
     const allReservationsForDate = reservations.filter(r => r.date === date);
+
+    // Debug logging for all user reservations and the new reservation
+    const userReservations = allReservationsForDate.filter(r => r.firstName.toLowerCase() === reservationName.toLowerCase());
+    console.log('[USER OVERLAP DEBUG] Checking for overlaps for:', reservationName);
+    console.log('[USER OVERLAP DEBUG] New reservation:', { startTime, endTime });
+    userReservations.forEach(r => {
+      console.log('[USER OVERLAP DEBUG] Existing reservation:', {
+        startTime: r.startTime,
+        endTime: r.endTime,
+        watercraftType: r.watercraftType,
+        unitIndex: r.unitIndex,
+        seatIndex: r.seatIndex
+      });
+    });
+
     const hasUserOverlap = allReservationsForDate.some(r =>
       r.firstName.toLowerCase() === reservationName.toLowerCase() && // Case-insensitive check
       isOverlap(r.startTime, r.endTime, startTime, endTime) &&

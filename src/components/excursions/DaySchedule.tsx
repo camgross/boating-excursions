@@ -39,7 +39,7 @@ const DaySchedule: React.FC<DayScheduleProps> = ({
             watercraft={watercraftDetails.details}
             date={date}
             onReservationChange={onReservationChange}
-            reservations={reservations.filter(r => r.watercraftType === watercraftDetails.details.type)}
+            reservations={reservations}
           />
         </div>
       </div>
