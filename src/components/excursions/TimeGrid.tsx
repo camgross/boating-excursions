@@ -316,6 +316,12 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     }
 
     try {
+      // Fetch the authenticated user's ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('You must be logged in to make a reservation.');
+        return;
+      }
       if (editReservation) {
         console.log('Updating existing reservation:', editReservation.id);
         const { data, error } = await supabase
@@ -347,7 +353,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
           seat_number: seatNumber + 1,
           watercraft_type_id: watercraft.id,
           date: date,
-          user_id: null // Explicitly set user_id to null for new reservations
+          user_id: user.id // Set user_id to the authenticated user's ID
         });
 
         const { data, error } = await supabase
@@ -360,7 +366,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
             seat_number: seatNumber + 1,
             watercraft_type_id: watercraft.id,
             date: date,
-            user_id: null // Explicitly set user_id to null for new reservations
+            user_id: user.id // Set user_id to the authenticated user's ID
           })
           .select();
 
