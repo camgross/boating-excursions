@@ -230,35 +230,26 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     const startTime = selectedStartTime as string;
     let endTime = selectedEndTime as string;
 
-    // If the reservation is a single slot, set endTime to the next slot
+    // If the reservation is a single slot, set endTime to 15 minutes after startTime
     if (startTime === endTime) {
       const idx = timeSlots.indexOf(startTime);
-      if (idx === timeSlots.length - 1) {
-        // Last slot, use schedule's end time
-        const { endTime: scheduleEndTime } = getOperatingHours();
-        endTime = scheduleEndTime;
-      } else {
-        endTime = timeSlots[idx + 1];
+      if (idx !== -1) {
+        const [endHour, endMinute] = timeSlots[idx].split(':').map(Number);
+        let endDate = new Date(0, 0, 0, endHour, endMinute);
+        endDate.setMinutes(endDate.getMinutes() + 15);
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        endTime = `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
       }
     } else {
-      // If the selection covers more than one slot, set endTime to the slot after the last selected slot
-      const startIdx = timeSlots.indexOf(startTime);
+      // If the selection covers more than one slot, set endTime to the end of the last selected slot
       const endIdx = timeSlots.indexOf(endTime);
-      if (endIdx > startIdx) {
-        if (endIdx === timeSlots.length - 1) {
-          // Last slot, use schedule's end time
-          const { endTime: scheduleEndTime } = getOperatingHours();
-          endTime = scheduleEndTime;
-        } else {
-          endTime = timeSlots[endIdx + 1];
-        }
+      if (endIdx !== -1) {
+        const [endHour, endMinute] = timeSlots[endIdx].split(':').map(Number);
+        let endDate = new Date(0, 0, 0, endHour, endMinute);
+        endDate.setMinutes(endDate.getMinutes() + 15);
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        endTime = `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
       }
-    }
-
-    // If the selected end time is the last slot, set endTime to the schedule's true end time
-    if (endTime === timeSlots[timeSlots.length - 1]) {
-      const { endTime: scheduleEndTime } = getOperatingHours();
-      endTime = scheduleEndTime;
     }
 
     // Debug logging for overlap check
