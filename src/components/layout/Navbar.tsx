@@ -10,9 +10,9 @@ export default function Navbar() {
             Boating Excursions
           </Link>
           <div className="flex space-x-4">
-            <Link href="/suggestions" className="text-gray-600 hover:text-primary">
+            {/* <Link href="/suggestions" className="text-gray-600 hover:text-primary">
               Suggest
-            </Link>
+            </Link> */}
           </div>
         </div>
       </div>
