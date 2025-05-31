@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Watercraft, Reservation } from '@/types/excursions';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import TimeGridOnboardingOverlay from './TimeGridOnboardingOverlay';
 
 interface TimeGridProps {
   watercraft: Watercraft;
@@ -25,6 +26,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   const [dragEnd, setDragEnd] = useState<{unitIndex: number, seatIndex: number, timeIndex: number} | null>(null);
   const [editReservation, setEditReservation] = useState<Reservation | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const getOperatingHours = () => {
     const [year, month, day] = date.split('-').map(Number);
@@ -468,8 +470,22 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     return () => window.removeEventListener('mouseup', handleUp);
   }, [dragging]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('hasSeenTimeGridOnboarding') !== 'true') {
+      setShowOnboarding(true);
+    }
+  }, []);
+
+  const handleCloseOnboarding = () => {
+    setShowOnboarding(false);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hasSeenTimeGridOnboarding', 'true');
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {showOnboarding && <TimeGridOnboardingOverlay onClose={handleCloseOnboarding} />}
       <div className="overflow-x-auto">
         <div className="min-w-full">
           {Array.from({ length: watercraft.quantity || 1 }).map((_, unitIndex) => (

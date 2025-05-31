@@ -1,3 +1,4 @@
+'use client';
 import React from 'react'
 import AvailableExcursions from '@/components/excursions/AvailableExcursions'
 
