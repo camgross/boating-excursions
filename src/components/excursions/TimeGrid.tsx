@@ -424,7 +424,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     setEditReservation(reservation);
     setReservationName(reservation.firstName);
     setSelectedStartTime(reservation.startTime);
-    setSelectedEndTime(timeSlots[timeSlots.indexOf(reservation.endTime) - 1] || reservation.startTime);
+    setSelectedEndTime(reservation.endTime);
     setSelectedUnit(reservation.unitIndex);
     setSelectedSeat(reservation.seatIndex);
     // Highlight all blocks in the reservation range
@@ -641,7 +641,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   required
                 >
-                  <option value="" disabled>Select your name</option>
+                  <option value="" disabled>Select a boater</option>
                   {userOptions.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
