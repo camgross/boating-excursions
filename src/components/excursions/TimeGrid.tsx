@@ -27,6 +27,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   const [editReservation, setEditReservation] = useState<Reservation | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [userOptions, setUserOptions] = useState<{ value: string; label: string }[]>([]);
 
   const getOperatingHours = () => {
     const [year, month, day] = date.split('-').map(Number);
@@ -318,8 +319,32 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     );
 
     if (hasUserOverlap) {
-      console.error('Overlapping reservation found for same user');
-      toast.error('You already have a reservation during this time.');
+      // Find the first overlapping reservation for details
+      const duplicate = allReservationsForDate.find(r =>
+        r.firstName.toLowerCase() === reservationName.toLowerCase() &&
+        isOverlap(r.startTime, r.endTime, startTime, endTime) &&
+        !isEditingThisReservation(r)
+      );
+      let dayName = '';
+      try {
+        const [year, month, day] = date.split('-').map(Number);
+        const dateObj = new Date(year, month - 1, day);
+        dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+      } catch {}
+      const watercraftName = duplicate?.watercraftType || '';
+      const seatNum = duplicate ? (duplicate.seatIndex + 1) : '';
+      toast.error(
+        `Duplicate reservation detected!\nDay: ${dayName}\nWatercraft: ${watercraftName}\nSeat: ${seatNum}`,
+        { duration: 7000 }
+      );
+      // Optionally allow Esc to close all toasts
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') toast.dismiss();
+      };
+      window.addEventListener('keydown', handleEsc);
+      setTimeout(() => {
+        window.removeEventListener('keydown', handleEsc);
+      }, 7000);
       return;
     }
 
@@ -483,6 +508,23 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
     }
   };
 
+  useEffect(() => {
+    async function fetchUsers() {
+      const { data, error } = await supabase.from('users').select('first_name, last_name');
+      if (error) {
+        console.error('Error fetching users:', error);
+        setUserOptions([]);
+      } else {
+        const options = (data || []).map((u: any) => ({
+          value: `${u.first_name}${u.last_name ? u.last_name[0] : ''}`,
+          label: `${u.first_name}${u.last_name ? u.last_name[0] : ''}`,
+        }));
+        setUserOptions(options);
+      }
+    }
+    fetchUsers();
+  }, []);
+
   return (
     <div className="space-y-4">
       {showOnboarding && <TimeGridOnboardingOverlay onClose={handleCloseOnboarding} />}
@@ -591,16 +633,19 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
             }}>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  First Name
+                  Name
                 </label>
-                <input
-                  type="text"
+                <select
                   value={reservationName}
-                  onChange={(e) => setReservationName(e.target.value)}
+                  onChange={e => setReservationName(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Enter your first name"
                   required
-                />
+                >
+                  <option value="" disabled>Select your name</option>
+                  {userOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
               <div className="flex justify-end gap-4">
                 <button
