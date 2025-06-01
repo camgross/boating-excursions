@@ -528,86 +528,193 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   return (
     <div className="space-y-4">
       {showOnboarding && <TimeGridOnboardingOverlay onClose={handleCloseOnboarding} />}
-      <div className="overflow-x-auto">
-        <div className="min-w-full">
-          {Array.from({ length: watercraft.quantity || 1 }).map((_, unitIndex) => (
-            <div key={unitIndex} className="mb-6">
-              <h5 className="text-lg font-semibold mb-2">
-                {watercraft.type} {watercraft.quantity ? `#${unitIndex + 1}` : ''}
-              </h5>
-              {/* Seat headers */}
-              <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `120px repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
-                <div></div>
-                {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => (
-                  <div key={`header-${seatIndex}`} className="h-8 text-xs font-medium flex items-center justify-center border-b">
-                    Seat {seatIndex + 1}
+      {/* Mobile layout: sticky time column + horizontally scrollable seat columns */}
+      <div className="block sm:hidden">
+        {Array.from({ length: watercraft.quantity || 1 }).map((_, unitIndex) => (
+          <div key={unitIndex} className="mb-6">
+            <h5 className="text-base font-semibold mb-2">
+              {watercraft.type} {watercraft.quantity ? `#${unitIndex + 1}` : ''}
+            </h5>
+            <div className="flex w-full">
+              {/* Sticky time labels */}
+              <div className="flex flex-col sticky left-0 z-10 bg-white border-r" style={{ minWidth: 60 }}>
+                <div className="h-8"></div>
+                {timeSlots.map((time) => (
+                  <div key={`mobile-time-${time}`} className="h-8 flex items-center justify-center text-xs font-medium border-b">
+                    {time}
                   </div>
                 ))}
               </div>
-              {/* Time slots grid */}
-              {timeSlots.map((time, timeIndex) => (
-                <div key={`row-${time}`} className="grid gap-1 items-center" style={{ gridTemplateColumns: `120px repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
-                  <div className="h-8 flex items-center justify-center text-xs font-medium">
-                    {time}
-                  </div>
-                  {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => {
-                    const isBooked = isSlotBooked(unitIndex, seatIndex, time);
-                    const isSelected = selectedSlots[`${unitIndex}-${seatIndex}-${time}`];
-                    const sequence = getReservationSequence(unitIndex, seatIndex, time);
-                    // Find reservation for this block
-                    const reservation = reservations.find(r =>
-                      r.unitIndex === unitIndex &&
-                      r.seatIndex === seatIndex &&
-                      r.date === date &&
-                      r.watercraftType === watercraft.type &&
-                      normalizeTime(time) >= normalizeTime(r.startTime) && normalizeTime(time) < normalizeTime(r.endTime)
-                    );
-                    // Show name only in the top (earliest) block of the reservation
-                    let showName = false;
-                    if (reservation && normalizeTime(reservation.startTime) === normalizeTime(time)) {
-                      showName = true;
-                    }
-                    return (
-                      <button
-                        key={`${unitIndex}-${seatIndex}-${time}`}
-                        onMouseDown={() => handleMouseDown(unitIndex, seatIndex, timeIndex)}
-                        onMouseEnter={() => handleMouseEnter(unitIndex, seatIndex, timeIndex)}
-                        onMouseUp={handleMouseUp}
-                        onClick={showName && reservation ? (e) => { e.preventDefault(); openEditModal(reservation); } : undefined}
-                        className={`h-8 border rounded transition-colors ${
-                          isBooked
-                            ? sequence >= 0  // Only check sequence if it's a booked slot
-                              ? sequence % 2 === 0
-                                ? 'bg-blue-500 text-white cursor-pointer'
-                                : 'bg-indigo-500 text-white cursor-pointer'
-                              : 'bg-blue-500 text-white cursor-pointer'  // Fallback for any edge cases
-                            : isSelected
-                              ? 'bg-primary text-white'
-                              : 'bg-gray-50 hover:bg-gray-100'
-                        } flex items-center justify-center text-xs font-medium relative`}
-                        disabled={isBooked && !showName}
-                      >
-                        {showName && reservation ? reservation.firstName : ''}
-                      </button>
-                    );
-                  })}
+              {/* Horizontally scrollable seat columns */}
+              <div className="overflow-x-auto w-full">
+                <div className="flex min-w-[120px]" style={{ width: Math.max(2, Math.min(2, watercraft.capacity)) * 90 }}>
+                  {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => (
+                    <div key={`mobile-seatcol-${seatIndex}`} className="flex flex-col min-w-[90px] max-w-[90px]">
+                      <div className="h-8 text-xs font-medium flex items-center justify-center border-b">
+                        Seat {seatIndex + 1}
+                      </div>
+                      {timeSlots.map((time, timeIndex) => {
+                        const isBooked = isSlotBooked(unitIndex, seatIndex, time);
+                        const isSelected = selectedSlots[`${unitIndex}-${seatIndex}-${time}`];
+                        const sequence = getReservationSequence(unitIndex, seatIndex, time);
+                        const reservation = reservations.find(r =>
+                          r.unitIndex === unitIndex &&
+                          r.seatIndex === seatIndex &&
+                          r.date === date &&
+                          r.watercraftType === watercraft.type &&
+                          normalizeTime(time) >= normalizeTime(r.startTime) && normalizeTime(time) < normalizeTime(r.endTime)
+                        );
+                        let showName = false;
+                        if (reservation && normalizeTime(reservation.startTime) === normalizeTime(time)) {
+                          showName = true;
+                        }
+                        return (
+                          <button
+                            key={`mobile-${unitIndex}-${seatIndex}-${time}`}
+                            onMouseDown={() => handleMouseDown(unitIndex, seatIndex, timeIndex)}
+                            onMouseEnter={() => handleMouseEnter(unitIndex, seatIndex, timeIndex)}
+                            onMouseUp={handleMouseUp}
+                            onTouchStart={() => handleMouseDown(unitIndex, seatIndex, timeIndex)}
+                            onTouchMove={(e) => {
+                              e.preventDefault();
+                              const touch = e.touches[0];
+                              const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                              if (element) {
+                                const [unit, seat, time] = element.getAttribute('data-slot')?.split('-') || [];
+                                if (unit && seat && time) {
+                                  handleMouseEnter(parseInt(unit), parseInt(seat), timeSlots.indexOf(time));
+                                }
+                              }
+                            }}
+                            onTouchEnd={handleMouseUp}
+                            onClick={showName && reservation ? (e) => { e.preventDefault(); openEditModal(reservation); } : undefined}
+                            data-slot={`${unitIndex}-${seatIndex}-${time}`}
+                            className={`h-8 border rounded transition-colors ${
+                              isBooked
+                                ? sequence >= 0
+                                  ? sequence % 2 === 0
+                                    ? 'bg-blue-500 text-white cursor-pointer'
+                                    : 'bg-indigo-500 text-white cursor-pointer'
+                                  : 'bg-blue-500 text-white cursor-pointer'
+                                : isSelected
+                                  ? 'bg-primary text-white'
+                                  : 'bg-gray-50 hover:bg-gray-100'
+                            } flex items-center justify-center text-xs font-medium relative`}
+                            disabled={isBooked && !showName}
+                          >
+                            {showName && reservation ? reservation.firstName : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
-          ))}
+          </div>
+        ))}
+      </div>
+      {/* Desktop/laptop layout: original grid */}
+      <div className="hidden sm:block">
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div className="min-w-max px-4 sm:px-0">
+            {Array.from({ length: watercraft.quantity || 1 }).map((_, unitIndex) => (
+              <div key={unitIndex} className="mb-6">
+                <h5 className="text-lg font-semibold mb-2">
+                  {watercraft.type} {watercraft.quantity ? `#${unitIndex + 1}` : ''}
+                </h5>
+                {/* Seat headers */}
+                <div className="grid gap-1 mb-1" style={{ gridTemplateColumns: `120px repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
+                  <div></div>
+                  {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => (
+                    <div key={`header-${seatIndex}`} className="h-8 text-xs font-medium flex items-center justify-center border-b">
+                      Seat {seatIndex + 1}
+                    </div>
+                  ))}
+                </div>
+                {/* Time slots grid */}
+                {timeSlots.map((time, timeIndex) => (
+                  <div key={`row-${time}`} className="grid gap-1 items-center" style={{ gridTemplateColumns: `120px repeat(${watercraft.capacity}, minmax(0, 1fr))` }}>
+                    <div className="h-8 flex items-center justify-center text-xs font-medium">
+                      {time}
+                    </div>
+                    {Array.from({ length: watercraft.capacity }).map((_, seatIndex) => {
+                      const isBooked = isSlotBooked(unitIndex, seatIndex, time);
+                      const isSelected = selectedSlots[`${unitIndex}-${seatIndex}-${time}`];
+                      const sequence = getReservationSequence(unitIndex, seatIndex, time);
+                      const reservation = reservations.find(r =>
+                        r.unitIndex === unitIndex &&
+                        r.seatIndex === seatIndex &&
+                        r.date === date &&
+                        r.watercraftType === watercraft.type &&
+                        normalizeTime(time) >= normalizeTime(r.startTime) && normalizeTime(time) < normalizeTime(r.endTime)
+                      );
+                      let showName = false;
+                      if (reservation && normalizeTime(reservation.startTime) === normalizeTime(time)) {
+                        showName = true;
+                      }
+                      return (
+                        <button
+                          key={`${unitIndex}-${seatIndex}-${time}`}
+                          onMouseDown={() => handleMouseDown(unitIndex, seatIndex, timeIndex)}
+                          onMouseEnter={() => handleMouseEnter(unitIndex, seatIndex, timeIndex)}
+                          onMouseUp={handleMouseUp}
+                          onTouchStart={() => handleMouseDown(unitIndex, seatIndex, timeIndex)}
+                          onTouchMove={(e) => {
+                            e.preventDefault();
+                            const touch = e.touches[0];
+                            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                            if (element) {
+                              const [unit, seat, time] = element.getAttribute('data-slot')?.split('-') || [];
+                              if (unit && seat && time) {
+                                handleMouseEnter(parseInt(unit), parseInt(seat), timeSlots.indexOf(time));
+                              }
+                            }
+                          }}
+                          onTouchEnd={handleMouseUp}
+                          onClick={showName && reservation ? (e) => { e.preventDefault(); openEditModal(reservation); } : undefined}
+                          data-slot={`${unitIndex}-${seatIndex}-${time}`}
+                          className={`h-8 sm:h-10 border rounded transition-colors ${
+                            isBooked
+                              ? sequence >= 0  // Only check sequence if it's a booked slot
+                                ? sequence % 2 === 0
+                                  ? 'bg-blue-500 text-white cursor-pointer'
+                                  : 'bg-indigo-500 text-white cursor-pointer'
+                                : 'bg-blue-500 text-white cursor-pointer'  // Fallback for any edge cases
+                              : isSelected
+                                ? 'bg-primary text-white'
+                                : 'bg-gray-50 hover:bg-gray-100'
+                          } flex items-center justify-center text-xs sm:text-sm font-medium relative`}
+                          disabled={isBooked && !showName}
+                        >
+                          {showName && reservation ? reservation.firstName : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-
       {/* Reservation Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full relative">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md relative">
+            {/* Close button */}
+            <button
+              onClick={handleCancelReservation}
+              className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-600"
+            >
+              ×
+            </button>
             {/* Tooltip icon - only in edit mode */}
             {editReservation && (
-              <div className="absolute top-4 right-4">
+              <div className="absolute top-4 right-12">
                 <button
                   type="button"
-                  className="w-6 h-6 flex items-center justify-center rounded-full border border-gray-400 text-gray-600 bg-white hover:bg-gray-100 focus:outline-none"
+                  className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-400 text-gray-600 bg-white hover:bg-gray-100 focus:outline-none"
                   onMouseEnter={() => setShowTooltip(true)}
                   onMouseLeave={() => setShowTooltip(false)}
                   onFocus={() => setShowTooltip(true)}
@@ -623,7 +730,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                 )}
               </div>
             )}
-            <h2 className="text-xl font-bold mb-4">
+            <h2 className="text-lg sm:text-xl font-bold mb-4 pr-8">
               {editReservation ? 'Edit Reservation' : 'New Reservation'}
             </h2>
             <form onSubmit={async (e) => {
@@ -638,7 +745,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                 <select
                   value={reservationName}
                   onChange={e => setReservationName(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-base"
                   required
                 >
                   <option value="" disabled>Select a boater</option>
@@ -647,11 +754,11 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                   ))}
                 </select>
               </div>
-              <div className="flex justify-end gap-4">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4">
                 <button
                   type="button"
                   onClick={handleCancelReservation}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                  className="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
                 >
                   Cancel
                 </button>
@@ -659,14 +766,14 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
                   <button
                     type="button"
                     onClick={handleDeleteReservation}
-                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                    className="w-full sm:w-auto px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
                   >
                     Delete Reservation
                   </button>
                 )}
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
+                  className="w-full sm:w-auto px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
                 >
                   Save Reservation
                 </button>
