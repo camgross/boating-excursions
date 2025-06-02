@@ -28,6 +28,8 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
   const [showTooltip, setShowTooltip] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [userOptions, setUserOptions] = useState<{ value: string; label: string }[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const getOperatingHours = () => {
     const [year, month, day] = date.split('-').map(Number);
@@ -440,23 +442,58 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
 
   const handleDeleteReservation = async () => {
     if (!editReservation) return;
-    
+    // Permission logic
+    let canDelete = false;
+    if (isAdmin) {
+      canDelete = true;
+    } else if (currentUser) {
+      // User created the reservation
+      if (editReservation.userId && editReservation.userId === currentUser.id) {
+        canDelete = true;
+      } else {
+        // User is the boater (first name and last initial match)
+        const userFirst = (currentUser.user_metadata?.first_name || '').toLowerCase();
+        const userLast = (currentUser.user_metadata?.last_name || '').toLowerCase();
+        const resFirst = (editReservation.firstName || '').toLowerCase();
+        // Try to extract last initial from reservation firstName (e.g., 'JohnD' -> 'd')
+        let resLastInitial = '';
+        if (editReservation.firstName && editReservation.firstName.length > 0) {
+          const match = editReservation.firstName.match(/^([a-zA-Z]+)([a-zA-Z])$/);
+          if (match) {
+            resLastInitial = match[2].toLowerCase();
+          }
+        }
+        if (
+          userFirst && resFirst && userFirst === resFirst.replace(/[^a-z]/g, '') &&
+          userLast && resLastInitial && userLast[0] === resLastInitial
+        ) {
+          canDelete = true;
+        }
+      }
+    }
+    if (!canDelete) {
+      toast.error('You do not have permission to delete this reservation.');
+      return;
+    }
     try {
       console.log('Attempting to delete reservation:', editReservation);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('reservations')
         .delete()
-        .eq('id', editReservation.id);
-
+        .eq('id', editReservation.id)
+        .select();
       if (error) {
         console.error('Error deleting reservation:', error);
         throw error;
       }
-
-      console.log('Successfully deleted reservation with id:', editReservation.id);
-      onReservationChange();
-      toast.success('Reservation deleted.');
-      clearSelection();
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('Successfully deleted reservation with id:', editReservation.id);
+        onReservationChange();
+        toast.success('Reservation deleted.');
+        clearSelection();
+      } else {
+        toast.error('You do not have permission to delete this reservation or it does not exist.');
+      }
     } catch (error) {
       console.error('Error deleting reservation:', error);
       toast.error('Failed to delete reservation. Please try again.');
@@ -523,6 +560,21 @@ const TimeGrid: React.FC<TimeGridProps> = ({ watercraft, date, onReservationChan
       }
     }
     fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    async function fetchCurrentUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+      // Example: check for admin role in user metadata or email
+      // Adjust this logic to match your actual admin detection
+      if (user && (user.role === 'admin' || (user.email && user.email.endsWith('@admin.com')))) {
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+      }
+    }
+    fetchCurrentUser();
   }, []);
 
   return (
