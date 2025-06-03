@@ -4,19 +4,28 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { DailySchedule } from '@/types/excursions';
 import DaySchedule from './DaySchedule';
 import { supabase } from '@/lib/supabase';
+import { toZonedTime, format } from 'date-fns-tz';
 
-// Helper to parse date string as local time
-const getLocalDateObj = (dateString: string) => {
+// Helper to parse date string as Central Time
+const getCentralDateObj = (dateString: string) => {
+  // dateString is expected in 'YYYY-MM-DD' format
+  // Create a date at midnight Central Time
   const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day);
+  // Create date in Central Time by using the timezone offset
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return toZonedTime(date, 'America/Chicago');
 };
 
 const getDayOfWeek = (dateString: string) => {
-  return getLocalDateObj(dateString).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'America/Chicago' });
+  // Use the exact date string to determine day of week
+  const date = new Date(dateString + 'T00:00:00');
+  return format(date, 'EEEE');
 };
 
 export const getFormattedDate = (dateString: string) => {
-  return getLocalDateObj(dateString).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' });
+  // Use the exact date string for formatting
+  const date = new Date(dateString + 'T00:00:00');
+  return format(date, 'MMMM d, yyyy');
 };
 
 const AvailableExcursions: React.FC = () => {
@@ -41,28 +50,64 @@ const AvailableExcursions: React.FC = () => {
           setWatercraftTypes(typesData || []);
         }
 
+        // Define the specific dates we want to show (fixed dates)
+        const targetDates = [
+          '2025-06-21', // Saturday
+          '2025-06-22', // Sunday
+          '2025-06-23', // Monday
+          '2025-06-24'  // Tuesday
+        ];
+
         // Then fetch schedules
-        const { data, error } = await supabase
+        let { data: scheduleData, error } = await supabase
           .from('daily_schedules')
           .select('*')
+          .in('date', targetDates)
           .order('date', { ascending: true });
 
         if (error) {
           console.error('Error fetching schedules:', error);
           setSchedules([]);
         } else {
-          const mappedSchedules = (data || []).map((item: any) => ({
-            ...item,
-            startTime: item.start_time,
-            endTime: item.end_time,
-            watercraft: (typesData || []).reduce((acc: any, type: any) => ({
-              ...acc,
-              [type.type]: {
-                details: type,
-                timeSlots: []
-              }
-            }), {})
-          }));
+          // If no schedules exist for these dates, create them
+          if (!scheduleData || scheduleData.length === 0) {
+            const newSchedules = targetDates.map(date => ({
+              date,
+              start_time: date === '2025-06-21' ? '14:00' : '13:00', // 2 PM for Saturday, 1 PM for others
+              end_time: date === '2025-06-21' ? '18:00' : '17:00',   // 6 PM for Saturday, 5 PM for others
+            }));
+
+            // Insert the new schedules
+            const { data: insertedData, error: insertError } = await supabase
+              .from('daily_schedules')
+              .insert(newSchedules)
+              .select();
+
+            if (insertError) {
+              console.error('Error creating schedules:', insertError);
+              setSchedules([]);
+              return;
+            }
+
+            scheduleData = insertedData;
+          }
+
+          const mappedSchedules = (scheduleData || []).map((item: any) => {
+            // Use the date directly without any timezone conversion
+            return {
+              ...item,
+              date: item.date, // Use the date as is
+              startTime: item.start_time,
+              endTime: item.end_time,
+              watercraft: (typesData || []).reduce((acc: any, type: any) => ({
+                ...acc,
+                [type.type]: {
+                  details: type,
+                  timeSlots: []
+                }
+              }), {})
+            };
+          });
           console.log('Mapped schedules:', JSON.stringify(mappedSchedules, null, 2));
           setSchedules(mappedSchedules);
         }
